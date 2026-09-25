@@ -84,7 +84,7 @@ export function Twine({ register }: { register: Register }) {
     <svg ref={register('twine.svg')} className="te-layer te-twine" viewBox="0 0 2200 1000" preserveAspectRatio="none" aria-hidden="true">
       <defs>
         {/* diagonal ply stripes: stroked along a near-vertical strand they read as twist */}
-        <pattern id={twistId} width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(38)">
+        <pattern id={twistId} width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(38) scale(0.75)">
           <rect width="12" height="12" fill="#8c5a33" />
           <rect y="0" width="12" height="4.6" fill="#b98355" />
           <rect y="4.6" width="12" height="1.2" fill="#d8a978" opacity="0.7" />
@@ -102,14 +102,14 @@ export function Twine({ register }: { register: Register }) {
         <g>
           <g ref={register('twine.shadow')} filter={`url(#${shadowId})`} stroke="#2a1405" opacity="0.42" transform="translate(5 7)">
             {STRANDS.map(([taut, slack], i) => (
-              <path key={i} d={taut} data-slack={slack} data-role="strand" strokeWidth={12} />
+              <path key={i} d={taut} data-slack={slack} data-role="strand" strokeWidth={9} />
             ))}
-            <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={11} />
+            <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={8.5} />
           </g>
           {STRANDS.map((d, i) => (
-            <Ply key={i} d={d} width={10.5} paint={paint} role="strand" />
+            <Ply key={i} d={d} width={7.5} paint={paint} role="strand" />
           ))}
-          <Ply d={TAIL} width={9.5} paint={paint} role="tail" />
+          <Ply d={TAIL} width={7} paint={paint} role="tail" />
           {/* stray fibres catching the light */}
           <path ref={register('twine.hairs')} d={HAIRS} stroke="#d2a577" strokeWidth={1.1} opacity={0.55} />
           <g ref={register('twine.fray')}>

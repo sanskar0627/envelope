@@ -330,7 +330,7 @@ export function WaveStampInk() {
 export function AddressBlock() {
   return (
     <g fill={INK}>
-      <text x={96} y={556} fontFamily={SERIF} fontWeight={700} fontSize={118} textLength={612} lengthAdjust="spacingAndGlyphs">
+      <text x={96} y={556} fontFamily={SERIF} fontWeight={700} fontSize={104} textLength={612} lengthAdjust="spacing">
         SANTORINI
       </text>
       <text x={100} y={628} fontFamily={SERIF} fontWeight={400} fontSize={56} letterSpacing={9} textLength={290} lengthAdjust="spacing" opacity={0.92}>

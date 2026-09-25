@@ -158,6 +158,18 @@ def apply_stains(rgb, dots, halo, rings):
     return out
 
 
+def tea_blotches(rgb, h, w, seed, amount=0.3, coverage=0.45):
+    """Large, soft, irregular peach/tea discolouration with faint tide-lines
+    (the mottled ageing that dominates the reference envelope)."""
+    brng = np.random.default_rng(seed)
+    field = fft_noise(h, w, 1.75, brng) * 0.8 + band_noise(h, w, 1 / 160, 1 / 40, brng) * 0.35
+    patches = smoothstep(1 - coverage - 0.1, 1 - coverage + 0.25, (field + 1) / 2)
+    tide = np.clip(ndimage.gaussian_laplace(patches, 2.4) * -14, 0, 1)
+    tint = np.array([0.80, 0.56, 0.34])
+    out = rgb * (1 - patches[..., None] * amount) + tint * patches[..., None] * amount
+    return out * (1 - tide[..., None] * 0.12)
+
+
 def polygon_sdf(h, w, poly):
     """Signed distance (px) to polygon; negative inside."""
     mask = Image.new("L", (w, h), 0)
@@ -219,11 +231,12 @@ def envelope_body():
     sdf = ndimage.gaussian_filter(sdf, 3.0)
 
     dots, halo, rings = stain_layer(
-        h, w, rng, spots=32, rings=2,
+        h, w, rng, spots=48, rings=2,
         zones=[(0.06, 0.05, 0.40, 0.35), (0.05, 0.55, 0.40, 0.95), (0.85, 0.75, 1.0, 1.0), (0.9, 0.0, 1.0, 0.2)],
     )
     rgb = apply_stains(rgb, dots, halo, rings)
-    rgb = edge_ageing(rgb, sdf, rng, h, w, width=30, strength=0.22)
+    rgb = tea_blotches(rgb, h, w, 31, amount=0.26, coverage=0.42)
+    rgb = edge_ageing(rgb, sdf, rng, h, w, width=42, strength=0.3)
 
     # hidden side-flap folds: extremely faint (flap covers most of them)
     tip = (0.5 * w, 0.64 * h)
@@ -248,11 +261,12 @@ def envelope_flap_outer():
     sdf = ndimage.gaussian_filter(sdf, 2.2)
 
     dots, halo, rings = stain_layer(
-        h, w, rng, spots=16, rings=1,
+        h, w, rng, spots=26, rings=1,
         zones=[(0.18, 0.08, 0.36, 0.3), (0.05, 0.0, 0.2, 0.15), (0.85, 0.0, 0.98, 0.1)],
     )
     rgb = apply_stains(rgb, dots * 0.9, halo, rings * 0.7)
-    rgb = edge_ageing(rgb, sdf, rng, h, w, width=18, strength=0.16)
+    rgb = tea_blotches(rgb, h, w, 57, amount=0.22, coverage=0.4)
+    rgb = edge_ageing(rgb, sdf, rng, h, w, width=26, strength=0.24)
 
     # soft fold highlight near hinge (paper bends over the top edge)
     yy = np.mgrid[0:h, 0:w][0].astype(np.float32)
@@ -268,7 +282,7 @@ def envelope_flap_inner():
     coffee ring near the tip (seen at the apex once the flap is open)."""
     rng = np.random.default_rng(4242)
     h, w = ENV_H, ENV_W
-    rgb = paper_base(h, w, rng, base=(0.815, 0.715, 0.580))
+    rgb = paper_base(h, w, rng, base=(0.765, 0.665, 0.540))
 
     tx, ty = FLAP_TIP[0] * w, FLAP_TIP[1] * h
     poly = [(2, 3), (w - 3, 1), (tx + 14, ty - 8), (tx, ty), (tx - 14, ty - 8)]
@@ -360,7 +374,13 @@ def ticket_sheet():
 
     # chipped, softened edges
     chips = smoothstep(0.55, 0.9, band_noise(H_, W_, 1 / 30, 1 / 8, rng)) * 11
-    alpha = worn_alpha(sdf + chips, rng, H_, W_, rough=3.2)
+    # a couple of real tears out of the edge (top-left corner, bottom edge)
+    tears = np.zeros_like(sdf)
+    for (cx, cy, r_) in ((0.012 * W_, 0.02 * H_, 16 * S), (0.43 * W_, 1.0 * H_, 9 * S), (0.99 * W_, 0.0, 12 * S)):
+        yy_, xx_ = np.mgrid[0:H_, 0:W_]
+        d_ = np.hypot(xx_ - cx, (yy_ - cy) * 1.3) + band_noise(H_, W_, 1 / 14, 1 / 3, rng) * 5 * S
+        tears += np.clip(r_ - d_, 0, None)
+    alpha = worn_alpha(sdf + chips + tears, rng, H_, W_, rough=3.2)
 
     # perforation: holes punched through
     px = TK_MAIN * S
@@ -454,10 +474,26 @@ def ticket_sheet():
     wc = wc / np.maximum(wa, 1e-4)[..., None] * (wa > 0)[..., None]
     # cracked ink along the handling creases: light hairline + faint dark shoulder
     for p0, p1, k in (((0.01, 0.06), (0.2, 0.98), 1.0), ((0.0, 0.47), (0.19, 0.42), 0.8), ((0.62, 0.0), (0.66, 0.3), 0.6), ((0.0, 0.87), (0.045, 1.0), 1.0)):
-        c = crease(H_, W_, (p0[0] * W_, p0[1] * H_), (p1[0] * W_, p1[1] * H_), wrng, depth=1.0, soft=1.3)
-        lite = np.maximum(lite, np.clip(c, 0, 1) * 0.75 * k)
+        c = crease(H_, W_, (p0[0] * W_, p0[1] * H_), (p1[0] * W_, p1[1] * H_), wrng, depth=1.0, soft=1.6)
+        lite = np.maximum(lite, np.clip(c, 0, 1) * 0.9 * k)
+        # the valley of the fold holds grime
+        dark = np.clip(-c, 0, 1) * 0.45 * k
+        wc = np.where((dark > wa)[..., None], np.array([0.35, 0.22, 0.12]), wc)
+        wa = np.maximum(wa, dark)
     scuffs = smoothstep(0.72, 0.9, band_noise(H_, W_, 1 / 9, 1 / 2.5, wrng)) * smoothstep(0.2, 0.8, band_noise(H_, W_, 1 / 120, 1 / 30, wrng))
     lite = np.maximum(lite, scuffs * 0.5)
+    # general abrasion over the whole face: fine white scratches + worn patches (F3 is heavily handled)
+    scratch_img = Image.new("L", (W_, H_), 0)
+    sd = ImageDraw.Draw(scratch_img)
+    for _ in range(260):
+        x0, y0 = wrng.uniform(0, W_), wrng.uniform(0, H_)
+        ang = wrng.normal(-0.5, 0.9)
+        L = wrng.uniform(8, 60) * S
+        pts = [(x0 + math.cos(ang + 0.15 * k) * L * k / 4, y0 + math.sin(ang + 0.15 * k) * L * k / 4) for k in range(5)]
+        sd.line(pts, fill=int(wrng.uniform(90, 230)), width=1)
+    scratches = ndimage.gaussian_filter(np.asarray(scratch_img, np.float32) / 255, 0.6)
+    worn = smoothstep(0.62, 0.85, fft_noise(H_, W_, 1.5, wrng) * 0.5 + 0.5) * 0.35
+    lite = np.maximum(lite, np.maximum(scratches * 0.75, worn))
     # compose: whitening over darkening
     out_a = np.clip(wa + lite * (1 - wa), 0, 1)
     out_rgb = (wc * wa[..., None] * (1 - lite[..., None]) + np.array([0.97, 0.95, 0.9]) * lite[..., None]) / np.maximum(out_a, 1e-4)[..., None]

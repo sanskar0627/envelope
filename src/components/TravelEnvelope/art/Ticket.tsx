@@ -128,11 +128,17 @@ function Stub() {
       <text x={cx} y={214} textAnchor="middle" fontFamily={SANS} fontWeight={800} fontSize={156} letterSpacing={-3}>
         17A
       </text>
-      {/* small gulls */}
-      <g stroke={INK} strokeWidth={4} fill="none" strokeLinecap="round">
-        <path d={`M${cx - 36} 262 q10 -10 18 0 q8 -10 18 0`} />
-        <path d={`M${cx + 10} 250 q7 -7 13 0 q6 -7 13 0`} />
-      </g>
+      {/* two little aircraft marks (as on the reference stub) */}
+      {[
+        [cx - 26, 262, -30, 0.26],
+        [cx + 22, 252, 20, 0.22],
+      ].map(([x, y, r, k], i) => (
+        <path
+          key={i}
+          transform={`translate(${x} ${y}) rotate(${r}) scale(${k})`}
+          d="M-86 4 C-60 -2 30 -6 64 -4 C80 -3 92 2 92 7 C92 12 78 14 64 14 L-70 12 C-82 12 -90 9 -86 4 Z M-2 4 L-46 54 L-24 54 L34 6 Z M-6 2 L-34 -34 L-18 -34 L22 2 Z M-76 6 L-94 -26 L-80 -26 L-56 6 Z"
+        />
+      ))}
       {/* airliner silhouette */}
       <g transform={`translate(${cx} 356) rotate(-14)`}>
         <path d="M-86 4 C-60 -2 30 -6 64 -4 C80 -3 92 2 92 7 C92 12 78 14 64 14 L-70 12 C-82 12 -90 9 -86 4 Z" />

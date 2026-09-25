@@ -124,6 +124,24 @@ def scene_svg() -> str:
     s.append(f'<g filter="url(#haze)">{ridge(horizon - 10, 70, "#86a3b9", 3, 0, 820, 1.2)}</g>')
     s.append(f'<g filter="url(#haze)">{ridge(horizon + 4, 46, "#6687a0", 5, 0, 700, 1.2)}</g>')
     s.append(f'<g filter="url(#haze)">{ridge(horizon + 18, 60, "#4d6a80", 9, 380, 900, 1.5)}</g>')
+    # the far caldera wall rising on the left (as in the reference): layered,
+    # ragged ridgelines, darker toward the viewer, with vertical cliff strata
+    def wall(y_left, y_right, x_end, rough, color, seed, op=1.0):
+        rr = np.random.default_rng(seed)
+        xs = np.linspace(0, x_end, 70)
+        base = y_left + (y_right - y_left) * (xs / x_end) ** 1.3
+        bumps = np.cumsum(rr.normal(0, rough, len(xs)))
+        bumps -= np.linspace(bumps[0], bumps[-1], len(xs))
+        ys = base + bumps + 14 * np.sin(xs / 45 + rr.uniform(0, 6))
+        pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+        return f'<polygon points="0,560 {pts} {x_end},560" fill="{color}" opacity="{op}"/>'
+    s.append(f'<g filter="url(#haze)">{wall(300, 505, 860, 5, "#7d98ae", 21, 0.9)}</g>')
+    s.append(wall(360, 520, 700, 6, "#56718a", 22))
+    s.append(wall(420, 530, 560, 5, "#415b73", 23))
+    for k in range(70):
+        x = r(0, 680)
+        top = 380 + (x / 700) ** 1.3 * 140
+        s.append(f'<path d="M{x:.0f} {top + r(0, 20):.0f} l{r(-4, 4):.0f} {r(30, 90):.0f}" stroke="{["#2f4459", "#8aa2b5"][k % 2]}" stroke-width="{r(1.5, 4):.1f}" opacity="{r(0.25, 0.5):.2f}"/>')
     # sea
     s.append(f'<rect y="{horizon + 18}" width="{W}" height="{H - horizon}" fill="url(#sea)"/>')
     # ripples: short light dashes, denser toward the viewer

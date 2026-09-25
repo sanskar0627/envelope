@@ -20,8 +20,19 @@ const PUDDLE_INNER = blobPath(84, 11, 0.06, 36)
 const HALF = SEAL_VIEW / 2
 
 /** Top-down propeller plane — the seal's emblem. */
-const EMBLEM =
-  'M0 -34 C4 -34 5.5 -28 5.5 -20 L5.5 -8 L34 -2 C36 -1.5 36 3 34 3.5 L5.5 6 L4.5 22 L15 27 C16 27.5 16 30 15 30.5 L0 29 L-15 30.5 C-16 30 -16 27.5 -15 27 L-4.5 22 L-5.5 6 L-34 3.5 C-36 3 -36 -1.5 -34 -2 L-5.5 -8 L-5.5 -20 C-5.5 -28 -4 -34 0 -34 Z'
+const EMBLEM = (() => {
+  // three-bladed propeller on a short shaft (the reference seal's device)
+  const blade = (deg: number) => {
+    const a = (deg * Math.PI) / 180
+    const c = Math.cos(a)
+    const sn = Math.sin(a)
+    const pt = (x: number, y: number) => `${(x * c - y * sn).toFixed(2)} ${(x * sn + y * c).toFixed(2)}`
+    // teardrop blade from the hub outwards along -y
+    return `M${pt(-3, -6)} C${pt(-9, -14)} ${pt(-11, -30)} ${pt(-4, -36)} C${pt(-1, -38)} ${pt(3, -38)} ${pt(5, -34)} C${pt(9, -26)} ${pt(7, -13)} ${pt(3, -6)} Z`
+  }
+  return [blade(0), blade(120), blade(240)].join(' ')
+})()
+const EMBLEM_SHAFT = 'M-2.2 8 L2.2 8 L1.6 40 L-1.6 40 Z'
 
 /* ------------------------------------------------------------------ fracture geometry */
 
@@ -181,8 +192,9 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
               <circle r={61} fill="#7d7d7d" />
               <circle r={52} fill="#777" />
               <circle r={56} fill="none" stroke="#9a9a9a" strokeWidth={2.2} />
-              <path d={EMBLEM} fill="#b4b4b4" transform="rotate(-18) scale(1.08)" />
-              <circle r={4.5} cy={-8} fill="#c6c6c6" transform="rotate(-18)" />
+              <path d={EMBLEM_SHAFT} fill="#a8a8a8" transform="rotate(-8)" />
+              <path d={EMBLEM} fill="#b4b4b4" transform="rotate(-8) scale(1.05)" />
+              <circle r={7} fill="#c8c8c8" />
             </g>
             {/* broken edge of this piece: only visible once the halves part */}
             <g ref={r('fracture')} opacity={0} clipPath={`url(#${puddleClip})`}>
