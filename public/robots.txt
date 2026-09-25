@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://envelope.sanskarshukla.com/sitemap.xml

@@ -7,6 +7,10 @@
 .te-stage {
   --paper-tex: url('./textures/envelope-body.webp');
   --flap-tex: url('./textures/envelope-flap-outer.webp');
+  --flap-inner-tex: url('./textures/envelope-flap-inner.webp');
+  --interior-tex: url('./textures/envelope-interior.webp');
+  --ticket-main-tex: url('./textures/ticket-main.webp');
+  --ticket-stub-tex: url('./textures/ticket-stub.webp');
   --ink-wear: url('./textures/ink-wear.webp');
 
   position: relative;
@@ -30,6 +34,18 @@
   background-size: auto, auto, auto, 360px 360px;
 }
 
+.te-context {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* faint film grain so the gradients never band */
 .te-stage::after {
   content: '';
@@ -45,7 +61,11 @@
 /* ------------------------------------------------------------------ scene */
 
 .te-scene {
-  --env-w: min(88vw, 1040px, calc((100svh - 190px) * 1.9));
+  display: grid;
+  justify-items: center;
+  gap: clamp(28px, 5vh, 56px);
+  /* sized so the OPEN envelope (body + flap = 1.56 × height) still fits the viewport */
+  --env-w: min(88vw, 1040px, calc((100svh - 150px) * 1.41));
   --u: calc(var(--env-w) / 100);
   /*
    * No scene-level perspective: Chrome rasterises perspective layers at a
@@ -105,9 +125,121 @@
   transform: translate3d(calc(var(--u) * 0.12), calc(var(--u) * 0.2), -0.5px);
 }
 
+/* far wall of the envelope, seen through the open mouth */
+.te-interior {
+  background: var(--interior-tex) 0 0 / 100% 100% no-repeat;
+  transform: translateZ(0);
+}
+
+/* shade inside the pocket: deepest under the hinge; lifts as light gets in */
+.te-interior__shade {
+  background: linear-gradient(180deg, rgba(38, 20, 8, 0.78) 0%, rgba(38, 20, 8, 0.42) 22%, rgba(38, 20, 8, 0.16) 42%, rgba(38, 20, 8, 0.08) 100%);
+  opacity: 0.92;
+  -webkit-mask: var(--interior-tex) 0 0 / 100% 100% no-repeat;
+  mask: var(--interior-tex) 0 0 / 100% 100% no-repeat;
+}
+
+.te-rim-ao {
+  transform: translateZ(0.45px);
+  mix-blend-mode: multiply;
+}
+
+/* the pocket panels: the envelope back, cut open along the mouth */
 .te-body {
   background: var(--paper-tex) 0 0 / 100% 100% no-repeat;
-  transform: translateZ(0);
+  transform: translateZ(0.6px);
+  -webkit-clip-path: url(#te-pocket-clip);
+  clip-path: url(#te-pocket-clip);
+  /* blocks the pointer so only the exposed part of the ticket is interactive */
+  pointer-events: auto;
+}
+
+.te-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ ticket */
+
+.te-ticket {
+  position: absolute;
+  transform-style: preserve-3d;
+  transform: translateZ(0.3px);
+}
+
+.te-ticket__lift {
+  position: absolute;
+  inset: 0;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.te-envelope[data-phase='open'] .te-ticket {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .te-envelope[data-phase='open'] .te-ticket:hover .te-ticket__lift {
+    transform: translateY(-1.4%);
+  }
+}
+
+.te-ticket__piece {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  filter: drop-shadow(calc(var(--u) * 0.05) calc(var(--u) * 0.12) calc(var(--u) * 0.18) rgba(40, 20, 6, 0.35));
+}
+
+.te-ticket__piece--main {
+  background: var(--ticket-main-tex) 0 0 / 100% 100% no-repeat;
+}
+
+.te-ticket__piece--stub {
+  background: var(--ticket-stub-tex) 0 0 / 100% 100% no-repeat;
+}
+
+.te-ticket__photo,
+.te-ticket__ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* the photo is printed onto the stock: highlights take the paper's colour */
+.te-ticket__photo {
+  mix-blend-mode: multiply;
+  opacity: 0.96;
+}
+
+.te-ticket__ink {
+  mix-blend-mode: multiply;
+  -webkit-mask-image: var(--ink-wear);
+  mask-image: var(--ink-wear);
+  -webkit-mask-size: calc(var(--u) * 16) calc(var(--u) * 16);
+  mask-size: calc(var(--u) * 16) calc(var(--u) * 16);
+}
+
+.te-ticket__light {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 90% at 18% 6%, rgba(255, 250, 238, 0.45), rgba(255, 250, 238, 0) 60%),
+    linear-gradient(160deg, rgba(255, 246, 228, 0) 50%, rgba(92, 52, 22, 0.28) 100%);
+  mix-blend-mode: soft-light;
+}
+
+.te-ticket__piece--main .te-ticket__light {
+  -webkit-mask: var(--ticket-main-tex) 0 0 / 100% 100% no-repeat;
+  mask: var(--ticket-main-tex) 0 0 / 100% 100% no-repeat;
+}
+
+.te-ticket__piece--stub .te-ticket__light {
+  -webkit-mask: var(--ticket-stub-tex) 0 0 / 100% 100% no-repeat;
+  mask: var(--ticket-stub-tex) 0 0 / 100% 100% no-repeat;
 }
 
 /* stamp paper glued to the envelope */
@@ -171,6 +303,43 @@
   mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
 }
 
+/* inside face: the flap's back, flipped so it reads correctly once open */
+.te-flap__face--inner {
+  /* rotateY (not X) so that, after the flap's own rotateX(180°), the hinge row
+     stays on the hinge and the tip points up — the paper child undoes the mirror */
+  transform: rotateY(180deg);
+}
+
+.te-flap__inner-paper {
+  background: var(--flap-inner-tex) 0 0 / 100% 100% no-repeat;
+  transform: scaleX(-1);
+}
+
+/* angle-driven lighting (written by the timeline) */
+.te-flap__shade--outer {
+  -webkit-mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
+  mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
+}
+
+.te-flap__shade--inner {
+  -webkit-mask: var(--flap-inner-tex) 0 0 / 100% 100% no-repeat;
+  mask: var(--flap-inner-tex) 0 0 / 100% 100% no-repeat;
+  background-color: rgba(26, 14, 6, 0.75);
+}
+
+/* soft shadow the open flap casts on the desk above the envelope */
+.te-flap-desk-shadow {
+  position: absolute;
+  left: 0;
+  top: -62%;
+  width: 100%;
+  height: 64%;
+  overflow: visible;
+  opacity: 0;
+  transform: translateZ(-1px);
+  pointer-events: none;
+}
+
 /* ------------------------------------------------------------------ twine + seal */
 
 .te-twine {
@@ -207,24 +376,33 @@
   pointer-events: none;
 }
 
+/* all seal pieces ride inside the flap (which sits at 1px): shadows under wax */
+.te-seal-half--flap-shadow,
 .te-seal-half--body-shadow {
-  transform: translate(-50%, -50%) translateZ(2.9px);
+  transform: translate(-50%, -50%) translateZ(2px);
+  backface-visibility: hidden;
 }
 
 .te-seal-half--body {
-  transform: translate(-50%, -50%) translateZ(3.4px);
-}
-
-/* z inside the flap (flap itself sits at 1px): shadow 3.0 total, wax 3.6 total */
-.te-seal-half--flap-shadow {
-  transform: translate(-50%, -50%) translateZ(2px);
+  transform: translate(-50%, -50%) translateZ(2.4px);
   backface-visibility: hidden;
 }
 
 .te-seal-half--flap {
   transform: translate(-50%, -50%) translateZ(2.6px);
-  /* once the flap swings past vertical the seal is on its hidden side */
   backface-visibility: hidden;
+}
+
+/* the flake of wax that stays on the envelope */
+.te-seal-half--chip {
+  transform: translate(-50%, -50%) translateZ(3.2px);
+}
+
+.te-seal-residue {
+  position: absolute;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  mix-blend-mode: multiply;
 }
 
 .te-seal__svg {

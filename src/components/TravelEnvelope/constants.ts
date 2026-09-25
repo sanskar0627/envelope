@@ -85,3 +85,54 @@ export const SEQ_SEAL = {
 
 /** Flap angle (deg) the release leaves it at — the hand-off point into Step 3. */
 export const FLAP_RELEASE_ANGLE = 3.5
+
+/* ------------------------------------------------------------------ envelope interior */
+
+/**
+ * Mouth of the pocket: the top edge of the side/bottom panels, seen once the
+ * flap is open. Everything above it shows the inside of the far wall (and the
+ * ticket inside). Envelope units, left → right.
+ */
+export const RIM: ReadonlyArray<readonly [number, number]> = [
+  [0, -3],
+  [330, 136],
+  [660, 262],
+  [1100, 326],
+  [1540, 262],
+  [1870, 136],
+  [2200, -3],
+]
+
+/* ------------------------------------------------------------------ ticket */
+
+/**
+ * The ticket is one sheet (main + stub joined by a perforation), in its own
+ * units which are 1:1 with envelope units. See scripts/generate-textures.py.
+ */
+export const TICKET = {
+  h: 880,
+  main: 1505, // perforation x
+  stub: 440,
+  w: 1945,
+  /** texture crops (the two pieces overlap by the ragged tear zone) */
+  mainTexW: 1516.8,
+  stubTexX: 1492,
+  stubTexW: 452.8,
+} as const
+
+/** Where the ticket sits inside the envelope (top-left, envelope units). */
+export const TICKET_INSIDE = { x: (ENV.w - TICKET.w) / 2, y: 100 } as const
+/** How far it rises into view once the envelope is open. */
+export const TICKET_PEEK = 42
+
+/* ------------------------------------------------------------------ Sequence A · part 2 (opening) */
+
+/** ms from the end of the seal break */
+export const SEQ_OPEN = {
+  flap: { at: 0, dur: 1150 },
+  recentre: { at: 120, dur: 1150 },
+  peek: { at: 980, dur: 620 },
+} as const
+
+/** How far the whole scene drifts down so the open flap stays in frame (fraction of envelope height). */
+export const OPEN_RECENTRE = 0.27

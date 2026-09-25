@@ -1,0 +1,23 @@
+# Santorini Travel Envelope
+
+> An interactive digital paper artifact about place, postage, and anticipation.
+
+## Canonical URL
+
+https://envelope.sanskarshukla.com/
+
+## Description
+
+Santorini Travel Envelope is a tactile web experience showing an aged cream envelope addressed to Santorini, Greece. Visitors press an oxblood wax seal to begin the opening gesture: the seal compresses, fractures, sheds a small wax chip, and releases the twine.
+
+## Interaction
+
+The primary interaction is the labeled wax-seal button. It supports pointer input and keyboard activation with Enter or Space. Decorative artwork is rendered with inline SVG and layered CSS materials.
+
+## Technology
+
+React, TypeScript, Vite, CSS, inline SVG, WebP textures, Fontsource fonts, and a dependency-free requestAnimationFrame timeline.
+
+## Topics
+
+interactive envelope, Santorini, digital paper artifact, tactile web design, SVG illustration, wax seal interaction, creative frontend portfolio

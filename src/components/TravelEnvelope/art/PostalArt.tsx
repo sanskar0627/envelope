@@ -13,7 +13,7 @@ const MONO = "'Courier Prime', 'Courier New', monospace"
 
 /* ------------------------------------------------------------------ shared */
 
-function RingText({ id, r, text, size, color, spacing = 4 }: { id: string; r: number; text: string; size: number; color: string; spacing?: number }) {
+export function RingText({ id, r, text, size, color, spacing = 4 }: { id: string; r: number; text: string; size: number; color: string; spacing?: number }) {
   // circle path starting at the left, running clockwise over the top
   const d = `M ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0`
   return (

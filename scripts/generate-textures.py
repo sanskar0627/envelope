@@ -263,6 +263,137 @@ def envelope_flap_outer():
     return to_rgba_img(rgb, alpha)
 
 
+def envelope_flap_inner():
+    """Inside face of the flap: the less-bleached side of the sheet, with a
+    coffee ring near the tip (seen at the apex once the flap is open)."""
+    rng = np.random.default_rng(4242)
+    h, w = ENV_H, ENV_W
+    rgb = paper_base(h, w, rng, base=(0.815, 0.715, 0.580))
+
+    tx, ty = FLAP_TIP[0] * w, FLAP_TIP[1] * h
+    poly = [(2, 3), (w - 3, 1), (tx + 14, ty - 8), (tx, ty), (tx - 14, ty - 8)]
+    sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 2.2)
+
+    dots, halo, rings = stain_layer(h, w, rng, spots=10, rings=0, zones=[(0.3, 0.05, 0.7, 0.4)])
+    rgb = apply_stains(rgb, dots, halo, rings)
+    # coffee drip near the tip (appears near the apex in the open state)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    for cx, cy, rr, k in ((0.487, 0.445, 16, 1.0), (0.503, 0.47, 10, 0.8), (0.495, 0.415, 6, 0.6)):
+        warp = band_noise(h, w, 1 / 30, 1 / 6, rng) * rr * 0.35
+        d = np.hypot(xx - cx * w, (yy - cy * h) * 1.1) + warp
+        spot = (1 - smoothstep(rr * 0.75, rr, d)) * 0.35 + np.exp(-((d - rr) ** 2) / (2 * 2.2 ** 2)) * 0.6
+        rgb = rgb * (1 - spot[..., None] * 0.55 * k) + np.array([0.45, 0.27, 0.14]) * spot[..., None] * 0.55 * k
+    rgb = edge_ageing(rgb, sdf, rng, h, w, width=22, strength=0.22)
+    # gum strip along the diagonal edges (slightly glossy, darker band)
+    band = np.exp(-np.clip(-sdf, 0, None) / 26) * (1 - np.exp(-np.clip(-sdf, 0, None) / 4))
+    rgb = rgb * (1 - band[..., None] * 0.07)
+    shade = crease(h, w, (0.2 * w, 0.02 * h), (0.36 * w, 0.3 * h), rng, depth=0.03)
+    rgb = rgb * (1 + shade[..., None])
+    alpha = worn_alpha(sdf, rng, h, w, rough=2.0)
+    return to_rgba_img(rgb, alpha)
+
+
+def envelope_interior():
+    """Inside of the envelope's far wall, seen through the open mouth."""
+    rng = np.random.default_rng(777)
+    h, w = ENV_H, ENV_W
+    rgb = paper_base(h, w, rng, base=(0.845, 0.748, 0.618))
+    m = 5
+    sdf = ndimage.gaussian_filter(polygon_sdf(h, w, [(m, m + 3), (w - m, m), (w - m - 2, h - m), (m + 2, h - m - 1)]), 3.0)
+    rgb = edge_ageing(rgb, sdf, rng, h, w, width=30, strength=0.2)
+    # inner seams of the side flaps glued behind
+    shade = crease(h, w, (0.0, 0.02 * h), (0.3 * w, 0.62 * h), rng, depth=0.035)
+    shade += crease(h, w, (w, 0.02 * h), (0.7 * w, 0.62 * h), rng, depth=0.035)
+    rgb = rgb * (1 + shade[..., None])
+    return to_rgba_img(rgb, worn_alpha(sdf, rng, h, w))
+
+
+# Ticket geometry (envelope units) — must match constants.ts TICKET
+TK_H, TK_MAIN, TK_STUB = 880, 1505, 440
+TK_SCALE = 1.25
+TK_HOLE_R, TK_HOLE_STEP = 6.5, 24
+
+
+def ticket_sheet():
+    """One continuous sheet of ticket stock, split along the perforation into
+    main + stub with *complementary* alpha, so the two pieces fit exactly at
+    rest and can tear apart later. Holes are punched through both."""
+    rng = np.random.default_rng(1223)
+    S = TK_SCALE
+    W_, H_ = int((TK_MAIN + TK_STUB) * S), int(TK_H * S)
+    rgb = paper_base(H_, W_, rng, base=(0.925, 0.845, 0.735))
+    m = 4
+    sdf = ndimage.gaussian_filter(polygon_sdf(H_, W_, [(m, m), (W_ - m, m + 2), (W_ - m, H_ - m), (m, H_ - m - 2)]), 3.2)
+
+    dots, halo, rings = stain_layer(
+        H_, W_, rng, spots=46, rings=2,
+        zones=[(0.0, 0.0, 0.2, 1.0), (0.72, 0.0, 0.8, 1.0), (0.9, 0.0, 1.0, 1.0), (0.2, 0.9, 0.8, 1.0)],
+    )
+    rgb = apply_stains(rgb, dots * 1.1, halo * 1.2, rings)
+    # tea-coloured blotches creeping in from the edges (heavier than the envelope)
+    blot = fft_noise(H_, W_, 1.7, rng)
+    inside = np.clip(-sdf, 0, None)
+    near_edge = np.exp(-inside / (0.07 * H_))
+    patches = smoothstep(0.05, 0.35, blot * 0.8 + near_edge * 0.55 - 0.2)
+    tide = np.clip(ndimage.gaussian_laplace(patches, 2.0) * -18, 0, 1)
+    tea = np.array([0.74, 0.55, 0.36])
+    rgb = rgb * (1 - patches[..., None] * 0.28) + tea * patches[..., None] * 0.28
+    rgb = rgb * (1 - tide[..., None] * 0.18)
+    # fine abrasion: light scuffs where the print surface wore off
+    scuff = smoothstep(0.55, 0.75, band_noise(H_, W_, 1 / 40, 1 / 6, rng)) * near_edge
+    rgb = rgb * (1 - scuff[..., None] * 0.1) + scuff[..., None] * 0.1 * 0.97
+    rgb = edge_ageing(rgb, sdf, rng, H_, W_, width=46, strength=0.42)
+
+    # handling creases: long diagonal across the info column, a short cross crease
+    shade = crease(H_, W_, (0.01 * W_, 0.06 * H_), (0.2 * W_, 0.98 * H_), rng, depth=0.06, soft=1.6)
+    shade += crease(H_, W_, (0.0, 0.47 * H_), (0.19 * W_, 0.42 * H_), rng, depth=0.04)
+    shade += crease(H_, W_, (0.62 * W_, 0.0), (0.66 * W_, 0.3 * H_), rng, depth=0.03)
+    rgb = rgb * (1 + shade[..., None])
+
+    # dog-eared bottom-left corner: folded crease + lighter, flattened corner
+    yy, xx = np.mgrid[0:H_, 0:W_].astype(np.float32)
+    fold = (xx / (0.045 * W_) + (H_ - yy) / (0.13 * H_)) < 1
+    rgb = np.where(fold[..., None], rgb * 1.02 + 0.015, rgb)
+    shade = crease(H_, W_, (0.0, 0.87 * H_), (0.045 * W_, H_), rng, depth=0.08, soft=1.2)
+    rgb = rgb * (1 + shade[..., None])
+
+    # chipped, softened edges
+    chips = smoothstep(0.6, 0.9, band_noise(H_, W_, 1 / 30, 1 / 8, rng)) * 7
+    alpha = worn_alpha(sdf + chips, rng, H_, W_, rough=3.2)
+
+    # perforation: holes punched through
+    px = TK_MAIN * S
+    step = TK_HOLE_STEP * S
+    hole_r = TK_HOLE_R * S
+    holes = np.zeros((H_, W_), np.float32)
+    ys = np.arange(step / 2, H_, step)
+    for hy in ys:
+        d = np.hypot(xx - px, yy - hy)
+        holes = np.maximum(holes, 1 - smoothstep(hole_r - 1.0, hole_r + 0.6, d))
+    # ink-dark rim where the pin crushed the fibres
+    rim = np.zeros_like(holes)
+    for hy in ys:
+        d = np.hypot(xx - px, yy - hy)
+        rim = np.maximum(rim, np.exp(-((d - hole_r - 1.2) ** 2) / 2.5))
+    rgb = rgb * (1 - rim[..., None] * 0.18)
+    alpha = alpha * (1 - holes)
+
+    # tear path through the holes: ragged, fibrous bridges between them
+    jag = band_noise(H_, 64, 1 / 8, 1 / 2, rng)[:, 0] * 2.6 * S + band_noise(H_, 64, 1 / 60, 1 / 12, rng)[:, 0] * 2.0 * S
+    tear_x = px + jag
+    main_mask = (xx < tear_x[:, None]).astype(np.float32)
+    # 1px soft split so the pieces don't show a hairline gap at rest
+    main_mask = ndimage.gaussian_filter(main_mask, (0, 0.5))
+    stub_mask = 1 - main_mask
+
+    split = int(px + 6 * S) + 8
+    main = to_rgba_img(rgb[:, :split], (alpha * main_mask)[:, :split])
+    stub_x0 = int(px - 6 * S) - 8
+    stub = to_rgba_img(rgb[:, stub_x0:], (alpha * stub_mask)[:, stub_x0:])
+    print(f"  ticket crop offsets (px @ x{S}): main 0..{split}, stub {stub_x0}..{W_}")
+    return main, stub
+
+
 # --------------------------------------------------------------------------- environment + utility tiles
 
 def desk_tile(size=1024):
@@ -322,9 +453,26 @@ def save_webp(img: Image.Image, name: str, q=86):
 
 
 if __name__ == "__main__":
+    import sys
+
+    only = set(sys.argv[1:])  # optional: generate a subset, e.g. `ticket flap-inner`
+    want = lambda k: not only or k in only  # noqa: E731
     print("Generating textures ->", os.path.abspath(OUT))
-    save_webp(envelope_body(), "envelope-body.webp", q=92)
-    save_webp(envelope_flap_outer(), "envelope-flap-outer.webp", q=92)
-    save_webp(desk_tile(), "desk-linen.webp", q=82)
-    save_webp(ink_mask_tile(), "ink-wear.webp", q=90)
-    save_webp(grain_tile(), "paper-grain.webp", q=85)
+    if want("body"):
+        save_webp(envelope_body(), "envelope-body.webp", q=92)
+    if want("flap"):
+        save_webp(envelope_flap_outer(), "envelope-flap-outer.webp", q=92)
+    if want("flap-inner"):
+        save_webp(envelope_flap_inner(), "envelope-flap-inner.webp", q=92)
+    if want("interior"):
+        save_webp(envelope_interior(), "envelope-interior.webp", q=90)
+    if want("ticket"):
+        main, stub = ticket_sheet()
+        save_webp(main, "ticket-main.webp", q=92)
+        save_webp(stub, "ticket-stub.webp", q=92)
+    if want("desk"):
+        save_webp(desk_tile(), "desk-linen.webp", q=82)
+    if want("ink"):
+        save_webp(ink_mask_tile(), "ink-wear.webp", q=90)
+    if want("grain"):
+        save_webp(grain_tile(), "paper-grain.webp", q=85)

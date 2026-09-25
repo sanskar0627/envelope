@@ -93,7 +93,7 @@ type Register = (name: string) => (el: Element | null) => void
  * cast shadow and its wax — so both shadows always sit *under* both waxes and
  * no shadow ever paints across the other piece at rest.
  */
-export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'shadow' | 'wax'; register: Register }) {
+export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'shadow' | 'wax' | 'chip' | 'residue'; register: Register }) {
   const uid = useId().replace(/:/g, '')
   const wax = `te-wax-${uid}`
   const shadow = `te-wax-shadow-${uid}`
@@ -156,6 +156,17 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
           <g transform="translate(1.4 2.4)" clipPath={`url(#${clip})`}>
             <path d={PUDDLE} fill="#3a0f08" opacity="0.55" />
           </g>
+        </g>
+      )}
+
+      {/* the whole seal's footprint, left as a faint waxy stain once it lifts */}
+      {layer === 'residue' && (
+        <g ref={r('residue')} opacity={0}>
+          {/* a greasy ghost of the puddle edge and a few specks of wax */}
+          <path d={PUDDLE} transform="scale(0.97)" fill="none" stroke="#8a3020" strokeWidth={1.2} strokeDasharray="14 6 30 9 8 5" opacity={0.13} />
+          <circle cx={-52} cy={58} r={2.2} fill="#8e1510" opacity={0.7} />
+          <circle cx={38} cy={72} r={1.6} fill="#8e1510" opacity={0.6} />
+          <circle cx={70} cy={30} r={1.3} fill="#8e1510" opacity={0.55} />
         </g>
       )}
 
@@ -231,7 +242,7 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
         </g>
       )}
 
-      {layer === 'wax' && part === 'body' && (
+      {layer === 'chip' && (
         <g transform={`translate(${CHIP_AT[0]} ${CHIP_AT[1]})`}>
           {/* shadow stays on the paper plane; the flake itself flies above it */}
           <path ref={r('chipShadow')} d={CHIP} fill="#2a0c05" opacity={0} />
