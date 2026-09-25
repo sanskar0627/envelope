@@ -1,0 +1,244 @@
+/* ==========================================================================
+   TravelEnvelope
+   One physical object: all states are transforms of the same layers.
+   Units: --u = 1% of the envelope width, so every detail scales together.
+   ========================================================================== */
+
+.te-stage {
+  --paper-tex: url('./textures/envelope-body.webp');
+  --flap-tex: url('./textures/envelope-flap-outer.webp');
+  --ink-wear: url('./textures/ink-wear.webp');
+
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: clamp(28px, 5vh, 56px);
+  padding: clamp(24px, 6vh, 72px) 16px;
+  overflow: hidden;
+  isolation: isolate;
+  color: #ecdcc4;
+
+  /* warm bookcloth desk, lit by a soft key from above-left */
+  background-color: #2a201a;
+  background-image:
+    radial-gradient(ellipse 58% 48% at 46% 40%, rgba(255, 206, 158, 0.17), rgba(255, 206, 158, 0) 72%),
+    radial-gradient(ellipse 130% 95% at 50% 44%, rgba(0, 0, 0, 0) 42%, rgba(9, 5, 3, 0.62) 100%),
+    linear-gradient(172deg, rgba(255, 226, 190, 0.05), rgba(0, 0, 0, 0.2)),
+    url('./textures/desk-linen.webp');
+  background-size: auto, auto, auto, 360px 360px;
+}
+
+/* faint film grain so the gradients never band */
+.te-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url('./textures/paper-grain.webp') 0 0 / 256px 256px;
+  mix-blend-mode: overlay;
+  opacity: 0.22;
+}
+
+/* ------------------------------------------------------------------ scene */
+
+.te-scene {
+  --env-w: min(88vw, 1040px, calc((100svh - 190px) * 1.9));
+  --u: calc(var(--env-w) / 100);
+  perspective: calc(var(--env-w) * 2.6);
+  perspective-origin: 50% 30%;
+}
+
+.te-envelope {
+  position: relative;
+  width: var(--env-w);
+  aspect-ratio: 2.2;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--pose-rx)) rotateZ(var(--pose-rz));
+}
+
+.te-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ desk shadows */
+
+.te-shadow {
+  position: absolute;
+  pointer-events: none;
+  border-radius: calc(var(--u) * 0.8);
+}
+
+/* broad, soft occlusion — the key light sits up and to the left */
+.te-shadow--ambient {
+  inset: 4% 3% 1% 4%;
+  background: rgba(10, 5, 2, 0.78);
+  filter: blur(calc(var(--u) * 3.2));
+  transform: translate3d(calc(var(--u) * 1.6), calc(var(--u) * 3.4), -2px);
+  opacity: 0.85;
+}
+
+/* tight contact shadow where the paper meets the desk */
+.te-shadow--contact {
+  inset: 0.6% 0.3% 0 0.6%;
+  background: rgba(12, 6, 2, 0.85);
+  filter: blur(calc(var(--u) * 0.45));
+  transform: translate3d(calc(var(--u) * 0.25), calc(var(--u) * 0.55), -1px);
+}
+
+/* ------------------------------------------------------------------ paper */
+
+/* the envelope is a stack of paper: a darker rim peeks out along the lower-right edges */
+.te-edge {
+  background: var(--paper-tex) 0 0 / 100% 100% no-repeat;
+  filter: brightness(0.58) sepia(0.35) saturate(1.1);
+  transform: translate3d(calc(var(--u) * 0.12), calc(var(--u) * 0.2), -0.5px);
+}
+
+.te-body {
+  background: var(--paper-tex) 0 0 / 100% 100% no-repeat;
+  transform: translateZ(0);
+}
+
+/* stamp paper glued to the envelope */
+.te-applied {
+  color: #eee2cb;
+  filter: drop-shadow(0 calc(var(--u) * 0.06) calc(var(--u) * 0.08) rgba(70, 38, 14, 0.45))
+    drop-shadow(calc(var(--u) * 0.12) calc(var(--u) * 0.22) calc(var(--u) * 0.3) rgba(70, 38, 14, 0.18));
+}
+
+/* printed / rubber-stamped ink: multiplies into the paper and wears unevenly */
+.te-ink {
+  mix-blend-mode: multiply;
+  -webkit-mask-image: var(--ink-wear);
+  mask-image: var(--ink-wear);
+  -webkit-mask-size: calc(var(--u) * 16) calc(var(--u) * 16);
+  mask-size: calc(var(--u) * 16) calc(var(--u) * 16);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  mask-mode: luminance;
+}
+
+/* directional key light across the paper (masked to the paper's own silhouette) */
+.te-light {
+  background:
+    radial-gradient(ellipse 70% 90% at 22% 8%, rgba(255, 250, 238, 0.5), rgba(255, 250, 238, 0) 62%),
+    linear-gradient(158deg, rgba(255, 246, 228, 0) 45%, rgba(92, 52, 22, 0.32) 100%);
+  mix-blend-mode: soft-light;
+  -webkit-mask: var(--paper-tex) 0 0 / 100% 100% no-repeat;
+  mask: var(--paper-tex) 0 0 / 100% 100% no-repeat;
+}
+
+/* ------------------------------------------------------------------ flap */
+
+.te-flap-shadow {
+  transform: translateZ(0.5px);
+  opacity: 0.34;
+  mix-blend-mode: multiply;
+}
+
+.te-flap {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 0;
+  transform-style: preserve-3d;
+  transform: translateZ(1px) rotateX(0deg);
+  pointer-events: none;
+}
+
+.te-flap__face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.te-flap__face--outer {
+  background: var(--flap-tex) 0 0 / 100% 100% no-repeat;
+}
+
+.te-light--flap {
+  -webkit-mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
+  mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
+}
+
+/* ------------------------------------------------------------------ twine + seal */
+
+.te-twine {
+  transform: translateZ(2px);
+  overflow: visible;
+}
+
+.te-seal {
+  position: absolute;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transform: translate(-50%, -50%) translateZ(3px);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.te-seal__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), filter 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (hover: hover) {
+  .te-seal:hover .te-seal__svg {
+    transform: translateY(-0.6%) scale(1.012);
+    filter: brightness(1.04);
+  }
+}
+
+.te-seal:focus-visible {
+  outline: none;
+}
+
+.te-seal:focus-visible .te-seal__svg {
+  filter: drop-shadow(0 0 calc(var(--u) * 0.6) rgba(255, 224, 186, 0.75));
+}
+
+/* ------------------------------------------------------------------ hint */
+
+.te-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(16px, 1.5vw, 21px);
+  letter-spacing: 0.08em;
+  color: rgba(236, 220, 196, 0.62);
+  user-select: none;
+}
+
+.te-hint::before,
+.te-hint::after {
+  content: '';
+  width: 2.2em;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(236, 220, 196, 0), rgba(236, 220, 196, 0.45));
+}
+
+.te-hint::after {
+  transform: scaleX(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .te-seal__svg {
+    transition: none;
+  }
+}
