@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# local sync bundles from Claude sessions
+.sync
+Claude outputs/
+.progress-update.md
+PROGRESS.md
+!README.md
