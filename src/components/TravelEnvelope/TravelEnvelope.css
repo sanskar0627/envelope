@@ -181,6 +181,11 @@
   cursor: pointer;
 }
 
+/* keyboard focus: a soft warm halo around the exposed ticket */
+.te-stage[data-phase='open'] .te-ticket:focus-visible .te-ticket__piece {
+  filter: drop-shadow(0 0 calc(var(--u) * 0.5) rgba(255, 224, 186, 0.8)) drop-shadow(calc(var(--u) * 0.05) calc(var(--u) * 0.12) calc(var(--u) * 0.18) rgba(40, 20, 6, 0.35));
+}
+
 @media (hover: hover) {
   .te-stage[data-phase='open'] .te-ticket:hover .te-ticket__lift,
   .te-stage[data-phase='open'] .te-ticket:focus-visible .te-ticket__lift {
@@ -233,10 +238,23 @@
   overflow: visible;
 }
 
-/* the photo is printed onto the stock: highlights take the paper's colour */
+/* the photo is a printed plate on the stock; wear + light sit on top of it */
 .te-ticket__photo {
-  mix-blend-mode: multiply;
-  opacity: 0.96;
+  opacity: 0.97;
+}
+
+.te-ticket__wear {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.te-ticket__wear--main {
+  background: url('./textures/ticket-wear-main.webp') 0 0 / 100% 100% no-repeat;
+}
+
+.te-ticket__wear--stub {
+  background: url('./textures/ticket-wear-stub.webp') 0 0 / 100% 100% no-repeat;
 }
 
 .te-ticket__ink {

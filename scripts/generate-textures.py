@@ -219,7 +219,7 @@ def envelope_body():
     sdf = ndimage.gaussian_filter(sdf, 3.0)
 
     dots, halo, rings = stain_layer(
-        h, w, rng, spots=24, rings=2,
+        h, w, rng, spots=32, rings=2,
         zones=[(0.06, 0.05, 0.40, 0.35), (0.05, 0.55, 0.40, 0.95), (0.85, 0.75, 1.0, 1.0), (0.9, 0.0, 1.0, 0.2)],
     )
     rgb = apply_stains(rgb, dots, halo, rings)
@@ -240,7 +240,7 @@ def envelope_body():
 def envelope_flap_outer():
     rng = np.random.default_rng(2024)
     h, w = ENV_H, ENV_W
-    rgb = paper_base(h, w, rng, base=(0.925, 0.872, 0.778))
+    rgb = paper_base(h, w, rng, base=(0.928, 0.852, 0.752))
 
     tx, ty = FLAP_TIP[0] * w, FLAP_TIP[1] * h
     poly = [(2, 3), (w - 3, 1), (tx + 14, ty - 8), (tx, ty), (tx - 14, ty - 8)]
@@ -359,7 +359,7 @@ def ticket_sheet():
     rgb = rgb * (1 + shade[..., None])
 
     # chipped, softened edges
-    chips = smoothstep(0.6, 0.9, band_noise(H_, W_, 1 / 30, 1 / 8, rng)) * 7
+    chips = smoothstep(0.55, 0.9, band_noise(H_, W_, 1 / 30, 1 / 8, rng)) * 11
     alpha = worn_alpha(sdf + chips, rng, H_, W_, rough=3.2)
 
     # perforation: holes punched through
@@ -429,7 +429,42 @@ def ticket_sheet():
             d.line([(start * SS, yy * SS), ((start + dx) * SS, (yy + dy) * SS)], fill=(tone, tone - 8, tone - 22, int(frng.uniform(110, 220))), width=max(1, int(0.5 * S * SS)))
         img = img.resize((2 * half, H_), Image.LANCZOS)
         strips.append(img)
-    return main, stub, strips[0], strips[1]
+    # wear that sits ON TOP of the print (photo + ink): burnt edges, rust
+    # speckles, crease lines where the ink cracked, white scuffs. Split with the
+    # same masks so it tears with the pieces.
+    wrng = np.random.default_rng(4711)
+    wa = np.zeros((H_, W_), np.float32)  # alpha of darkening
+    wc = np.zeros((H_, W_, 3), np.float32)  # colour of darkening
+    lite = np.zeros((H_, W_), np.float32)  # alpha of whitening
+    inside = np.clip(-sdf, 0, None)
+    burn_var = 0.5 + 0.5 * band_noise(H_, W_, 1 / 90, 1 / 12, wrng)
+    burn = np.exp(-inside / (13 * S)) * np.clip(burn_var, 0, 1) * 0.85
+    burn += smoothstep(0.55, 0.85, band_noise(H_, W_, 1 / 40, 1 / 10, wrng)) * np.exp(-inside / (40 * S)) * 0.35
+    burn_col = np.array([0.42, 0.25, 0.12])
+    wa = np.maximum(wa, burn)
+    wc += burn_col * burn[..., None]
+    # grime: soft, patchy browning creeping in from the edges and corners
+    grime = smoothstep(0.1, 0.55, fft_noise(H_, W_, 1.6, wrng) * 0.7 + np.exp(-inside / (0.06 * H_)) * 0.8 - 0.25) * 0.38
+    wc += np.array([0.52, 0.34, 0.17]) * grime[..., None]
+    wa = np.maximum(wa, grime)
+    sp_dots, sp_halo, _ = stain_layer(H_, W_, wrng, spots=34, rings=0, zones=[(0.0, 0.0, 1.0, 0.12), (0.0, 0.88, 1.0, 1.0), (0.0, 0.0, 0.08, 1.0), (0.93, 0.0, 1.0, 1.0)])
+    rust = np.clip(sp_dots * 0.6 + sp_halo * 0.3, 0, 0.7)
+    wc += np.array([0.55, 0.31, 0.14]) * rust[..., None]
+    wa = np.maximum(wa, rust)
+    wc = wc / np.maximum(wa, 1e-4)[..., None] * (wa > 0)[..., None]
+    # cracked ink along the handling creases: light hairline + faint dark shoulder
+    for p0, p1, k in (((0.01, 0.06), (0.2, 0.98), 1.0), ((0.0, 0.47), (0.19, 0.42), 0.8), ((0.62, 0.0), (0.66, 0.3), 0.6), ((0.0, 0.87), (0.045, 1.0), 1.0)):
+        c = crease(H_, W_, (p0[0] * W_, p0[1] * H_), (p1[0] * W_, p1[1] * H_), wrng, depth=1.0, soft=1.3)
+        lite = np.maximum(lite, np.clip(c, 0, 1) * 0.75 * k)
+    scuffs = smoothstep(0.72, 0.9, band_noise(H_, W_, 1 / 9, 1 / 2.5, wrng)) * smoothstep(0.2, 0.8, band_noise(H_, W_, 1 / 120, 1 / 30, wrng))
+    lite = np.maximum(lite, scuffs * 0.5)
+    # compose: whitening over darkening
+    out_a = np.clip(wa + lite * (1 - wa), 0, 1)
+    out_rgb = (wc * wa[..., None] * (1 - lite[..., None]) + np.array([0.97, 0.95, 0.9]) * lite[..., None]) / np.maximum(out_a, 1e-4)[..., None]
+    out_a = out_a * alpha
+    wear_main = to_rgba_img(out_rgb[:, :split], (out_a * main_mask)[:, :split])
+    wear_stub = to_rgba_img(out_rgb[:, stub_x0:], (out_a * stub_mask)[:, stub_x0:])
+    return main, stub, strips[0], strips[1], wear_main, wear_stub
 
 
 # --------------------------------------------------------------------------- environment + utility tiles
@@ -505,7 +540,9 @@ if __name__ == "__main__":
     if want("interior"):
         save_webp(envelope_interior(), "envelope-interior.webp", q=90)
     if want("ticket"):
-        main, stub, fib_main, fib_stub = ticket_sheet()
+        main, stub, fib_main, fib_stub, wear_main, wear_stub = ticket_sheet()
+        save_webp(wear_main, "ticket-wear-main.webp", q=90)
+        save_webp(wear_stub, "ticket-wear-stub.webp", q=90)
         save_webp(main, "ticket-main.webp", q=92)
         save_webp(stub, "ticket-stub.webp", q=92)
         save_webp(fib_main, "tear-fibres-main.webp", q=90)

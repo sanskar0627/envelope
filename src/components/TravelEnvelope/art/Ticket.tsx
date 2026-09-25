@@ -183,6 +183,8 @@ export function Ticket({ register }: { register: Register }) {
           <InfoColumn />
           <PhotoPostmark />
         </svg>
+        {/* wear over the print: burnt edges, rust speckle, cracked ink along the creases */}
+        <div className="te-ticket__wear te-ticket__wear--main" />
         <div className="te-ticket__light" />
         {/* fluffed fibres along the torn edge — revealed top → bottom as it tears */}
         <div
@@ -199,6 +201,7 @@ export function Ticket({ register }: { register: Register }) {
         <svg className="te-ticket__ink" viewBox={`${TICKET.stubTexX} 0 ${TICKET.stubTexW} ${TICKET.h}`} preserveAspectRatio="none" aria-hidden="true">
           <Stub />
         </svg>
+        <div className="te-ticket__wear te-ticket__wear--stub" />
         <div className="te-ticket__light" />
         <div
           ref={register('ticket.fibres.stub')}

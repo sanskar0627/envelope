@@ -163,8 +163,10 @@ def scene_svg() -> str:
     houses.sort()
     s.extend(house(x, y, w, h) for (y, x, w, h) in houses)
 
-    # the blue-domed church (the hero)
+    # the blue-domed church (the hero) — drawn at 1:1 then scaled up about its
+    # base so it reads as the subject, as in the reference postcard
     cx, cy, rd = 900, 470, 92
+    s.append(f'<g transform="translate({cx} {cy + 210}) scale(1.32) translate({-cx - 70} {-cy - 210})">')
     s.append(f'<rect x="{cx - 104}" y="{cy}" width="208" height="210" fill="#f4f2ec"/>')
     s.append(f'<rect x="{cx + 104}" y="{cy + 6}" width="46" height="204" fill="#bdbcc0"/>')
     s.append(f'<rect x="{cx - 112}" y="{cy - 8}" width="224" height="16" fill="#fbfaf6"/>')
@@ -180,6 +182,13 @@ def scene_svg() -> str:
     s.append(f'<rect x="{bx}" y="{cy - 60}" width="70" height="250" fill="#f1efe8"/><rect x="{bx + 70}" y="{cy - 56}" width="18" height="246" fill="#b3b3b8"/>')
     s.append(f'<path d="M{bx + 18} {cy + 20} v-40 a17 17 0 0 1 34 0 v40 Z" fill="#284460"/>')
     s.append(f'<path d="M{bx} {cy - 60} q35 -40 70 0 Z" fill="#f4f2ec"/><rect x="{bx + 33}" y="{cy - 110}" width="4" height="34" fill="#f1efe8"/>')
+    # arcade under the church terrace
+    s.append(f'<rect x="{cx - 150}" y="{cy + 210}" width="420" height="90" fill="#efece5"/>')
+    for k in range(4):
+        ax = cx - 130 + k * 100
+        s.append(f'<path d="M{ax} {cy + 300} v-50 a30 30 0 0 1 60 0 v50 Z" fill="{"#3b5f86" if k % 2 else "#2c4c70"}"/>')
+    s.append(f'<rect x="{cx + 270}" y="{cy + 214}" width="26" height="86" fill="#b9b8bd"/>')
+    s.append("</g>")
     # foreground terrace with the big arch
     s.append('<path d="M700 1000 V820 H1400 V1000 Z" fill="#ece9e1"/>')
     s.append('<path d="M760 1000 V900 a70 70 0 0 1 140 0 V1000 Z" fill="#36597f"/>')
@@ -270,14 +279,14 @@ def craquelure(h, w) -> np.ndarray:
 def print_grade(img: np.ndarray) -> np.ndarray:
     h, w = img.shape[:2]
     # vintage: lifted blacks, softened highlights, slight warm cast, reduced saturation in shadows
-    img = 0.07 + img * 0.9
+    img = 0.035 + img * 0.95
     lum = img.mean(2, keepdims=True)
-    img = lum + (img - lum) * 0.92
+    img = lum + (img - lum) * 1.12  # the reference print is vivid: keep the Aegean blues rich
     img = img * np.array([1.02, 1.0, 0.95]) + np.array([0.015, 0.01, 0])
     # uneven fade toward the edges of the print
     yy, xx = np.mgrid[0:h, 0:w]
     edge = np.minimum.reduce([xx, yy, w - 1 - xx, h - 1 - yy]).astype(np.float32)
-    fade = np.exp(-edge / 60) * 0.18
+    fade = np.exp(-edge / 50) * 0.14
     img = img * (1 - fade[..., None]) + np.array([0.93, 0.88, 0.8]) * fade[..., None]
     # grain
     g = ndimage.gaussian_filter(rng.standard_normal((h, w)), 0.8)

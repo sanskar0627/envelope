@@ -142,6 +142,8 @@ export function buildSealBreak(n: NodeMap): Track[] {
     ease: ease('out'),
     update: (v) => {
       morphs.forEach((m) => m(v))
+      // stray fibres are drawn on the taut strands; they settle out of view as the strands bow
+      attr(n.get('twine.hairs'), 'opacity', String(0.55 * Math.max(0, 1 - v * 3)))
       const sh = n.get('twine.shadow')
       attr(sh, 'transform', `translate(${lerp(5, 10, v)} ${lerp(7, 16, v)})`)
       attr(sh, 'opacity', String(lerp(0.42, 0.3, v)))
@@ -179,7 +181,9 @@ export function buildSealBreak(n: NodeMap): Track[] {
     at: T.retract.at,
     dur: 120,
     ease: ease('out'),
-    update: (v) => attr(n.get('twine.fray'), 'opacity', String(1 - v)),
+    update: (v) => {
+      attr(n.get('twine.fray'), 'opacity', String(1 - v))
+    },
   })
 
   /* the flap tip, now free, lifts off the body — hand-off to the opening */
@@ -311,7 +315,7 @@ export function buildTicketSlide(n: NodeMap): Track[] {
 
   // current offsets (the peek), in px
   const peekY = -TICKET_PEEK * u
-  const state = { gy: 0, sx: 0, sy: 0, hx: 0, hy: 0, cx: 0, cy: 0, wobble: 0, rot: 0, scale: 1, lift: 0, z: 0.3 }
+  const state = { gy: 0, sx: 0, sy: 0, hx: 0, hy: 0, cx: 0, cy: 0, wobble: 0, rot: 0, scale: 1, lift: 0, rest: 0, z: 0.3 }
   const write = () =>
     style(
       ticket,
@@ -319,9 +323,11 @@ export function buildTicketSlide(n: NodeMap): Track[] {
       BASE.ticket(state.sx + state.hx + state.cx, peekY + state.gy + state.sy + state.hy + state.cy, state.wobble + state.rot, state.scale * (1 + 0.035 * state.lift), state.z),
     )
   const writeShadow = () => {
+    // lift shadow while held + the soft ambient shadow it keeps once it rests on the desk
     const L = state.lift
-    style(shadow, 'opacity', String(0.55 * L))
-    style(shadow, 'transform', `translate3d(${(18 * L).toFixed(1)}px, ${(34 * L).toFixed(1)}px, -0.2px) scale(${(1 + 0.03 * L).toFixed(3)})`)
+    const rest = state.rest
+    style(shadow, 'opacity', String(Math.min(0.62, 0.55 * L + 0.34 * rest)))
+    style(shadow, 'transform', `translate3d(${(6 * rest + 18 * L).toFixed(1)}px, ${(12 * rest + 34 * L).toFixed(1)}px, -0.2px) scale(${(1 + 0.03 * L).toFixed(3)})`)
   }
 
   const friction = cubicBezier(0.62, 0, 0.24, 1) // sticks, gives, glides out
@@ -391,6 +397,7 @@ export function buildTicketSlide(n: NodeMap): Track[] {
       ease: linear,
       update: (p) => {
         state.lift = p < 0.35 ? cubicBezier(0.3, 0, 0.3, 1)(p / 0.35) : 1 - cubicBezier(0.4, 0, 0.3, 1)((p - 0.35) / 0.65)
+        state.rest = p < 0.35 ? 0 : cubicBezier(0.4, 0, 0.3, 1)((p - 0.35) / 0.65)
         writeShadow()
         write()
       },

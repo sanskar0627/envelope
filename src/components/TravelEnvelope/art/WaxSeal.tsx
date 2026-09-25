@@ -119,22 +119,22 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
           <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="relief" />
           <feColorMatrix in="relief" type="luminanceToAlpha" result="reliefA" />
           <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="dome" />
-          <feTurbulence type="fractalNoise" baseFrequency="0.42" numOctaves="2" seed="4" result="grain" />
-          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.045 0" result="grainA" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.3" numOctaves="2" seed="4" result="grain" />
+          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.026 0" result="grainA" />
           <feComposite in="reliefA" in2="dome" operator="arithmetic" k1="1.0" k2="0" k3="0" k4="0" result="h0" />
           <feComposite in="h0" in2="grainA" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="height" />
 
-          <feDiffuseLighting in="height" surfaceScale="11" diffuseConstant="1.12" lightingColor="#fff0ea" result="diffuse">
+          <feDiffuseLighting in="height" surfaceScale="11" diffuseConstant="0.98" lightingColor="#fff0ea" result="diffuse">
             <feDistantLight azimuth="235" elevation="52" />
           </feDiffuseLighting>
-          <feSpecularLighting in="height" surfaceScale="11" specularConstant="1.35" specularExponent="42" lightingColor="#fff1e6" result="spec">
+          <feSpecularLighting in="height" surfaceScale="11" specularConstant="1.5" specularExponent="48" lightingColor="#fff1e6" result="spec">
             <feDistantLight azimuth="235" elevation="50" />
           </feSpecularLighting>
-          <feSpecularLighting in="height" surfaceScale="11" specularConstant="0.35" specularExponent="6" lightingColor="#ff7a66" result="sheen">
+          <feSpecularLighting in="height" surfaceScale="11" specularConstant="0.35" specularExponent="6" lightingColor="#ff5a44" result="sheen">
             <feDistantLight azimuth="235" elevation="42" />
           </feSpecularLighting>
 
-          <feFlood floodColor="#8e1510" result="base" />
+          <feFlood floodColor="#7a0906" result="base" />
           <feComposite in="base" in2="SourceAlpha" operator="in" result="baseIn" />
           <feComposite in="baseIn" in2="diffuse" operator="arithmetic" k1="1.02" k2="0" k3="0" k4="0" result="lit" />
           <feComposite in="sheen" in2="SourceAlpha" operator="in" result="sheenIn" />

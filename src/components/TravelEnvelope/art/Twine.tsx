@@ -13,6 +13,7 @@
  * each path retracts.
  */
 import { useId } from 'react'
+import { rng } from './geometry'
 
 type Register = (name: string) => (el: Element | null) => void
 
@@ -34,6 +35,30 @@ const TAIL_FRAY: Array<[string, string]> = [
   ['M806 962 c-6 8 -11 15 -20 20', 'M828 992 c-7 7 -13 13 -23 16'],
   ['M806 962 c-2 9 -2 16 -8 24', 'M828 992 c-3 8 -4 15 -11 22'],
 ]
+
+/** Stray fibres standing off the ply — sampled along each taut strand (deterministic). */
+const HAIRS = (() => {
+  const r = rng(808)
+  const out: string[] = []
+  const cubic = (d: string) => d.match(/-?\d*\.?\d+/g)!.map(Number)
+  for (const [taut] of [...STRANDS, TAIL]) {
+    const n = cubic(taut)
+    const seg = n.length === 8 ? [n] : [n.slice(0, 8), [n[6], n[7], ...n.slice(8, 14)], [n[12], n[13], ...n.slice(14, 20)]]
+    for (const [x0, y0, x1, y1, x2, y2, x3, y3] of seg) {
+      for (let k = 0; k < 16; k++) {
+        const t = r()
+        const mt = 1 - t
+        const x = mt * mt * mt * x0 + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3
+        const y = mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3
+        const side = r() < 0.5 ? -1 : 1
+        const len = 4 + r() * 9
+        const a = (r() - 0.5) * 1.4
+        out.push(`M${x.toFixed(1)} ${y.toFixed(1)} q${(side * len * 0.6).toFixed(1)} ${(a * len * 0.4).toFixed(1)} ${(side * len).toFixed(1)} ${(a * len + (r() - 0.5) * 4).toFixed(1)}`)
+      }
+    }
+  }
+  return out.join(' ')
+})()
 
 type Role = 'strand' | 'tail'
 
@@ -85,6 +110,8 @@ export function Twine({ register }: { register: Register }) {
             <Ply key={i} d={d} width={10.5} paint={paint} role="strand" />
           ))}
           <Ply d={TAIL} width={9.5} paint={paint} role="tail" />
+          {/* stray fibres catching the light */}
+          <path ref={register('twine.hairs')} d={HAIRS} stroke="#d2a577" strokeWidth={1.1} opacity={0.55} />
           <g ref={register('twine.fray')}>
             {TAIL_FRAY.map(([taut, slack], i) => (
               <path key={i} d={taut} data-slack={slack} stroke="#9c6a44" strokeWidth={2.6} opacity={0.85} />
