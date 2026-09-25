@@ -156,3 +156,19 @@ export const SLIDE_DRIFT = 60
 export const SLIDE_FOLLOW = 0.74
 /** Hero pose: final screen rotation (deg, F3), width relative to the envelope, vertical position in the viewport. */
 export const HERO = { rotate: 3.5, widthOfEnvelope: 1.08, maxWidthOfViewport: 0.9, maxHeightOfViewport: 0.62, centreY: 0.46 } as const
+
+/* ------------------------------------------------------------------ Sequence B · part 2: the tear */
+
+/** ms from the moment the ticket settles in the hero pose (after a short breath) */
+export const SEQ_TEAR = {
+  breath: 160,
+  tension: { at: 0, dur: 300 },
+  tear: { at: 230, dur: 520 },
+  separate: { at: 720, dur: 820 },
+} as const
+
+/** Half-width of the torn-fibre overlays either side of the perforation (units) — matches generate-textures.py */
+export const TEAR_STRIP = 20
+
+/** Final separation (F3): stub moves right/down and turns back ~0.5° against the main ticket (units, deg). */
+export const TORN = { mainShift: -14, stubShift: 30, stubDrop: 12, stubTurn: -0.5 } as const

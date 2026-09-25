@@ -201,6 +201,27 @@
 
 .te-ticket__piece--stub {
   background: var(--ticket-stub-tex) 0 0 / 100% 100% no-repeat;
+  /* tears away pivoting on the bottom of the perforation */
+  transform-origin: 2.87% 100%;
+}
+
+.te-ticket__fibres {
+  --tear: 0%;
+  position: absolute;
+  top: 0;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(var(--tear) - 4%), transparent var(--tear));
+  mask-image: linear-gradient(to bottom, #000 calc(var(--tear) - 4%), transparent var(--tear));
+}
+
+.te-ticket__fibres--main {
+  background: url('./textures/tear-fibres-main.webp') 0 0 / 100% 100% no-repeat;
+}
+
+.te-ticket__fibres--stub {
+  background: url('./textures/tear-fibres-stub.webp') 0 0 / 100% 100% no-repeat;
 }
 
 .te-ticket__photo,

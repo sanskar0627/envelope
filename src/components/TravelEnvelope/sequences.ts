@@ -3,8 +3,8 @@
  * that write to registered DOM nodes. Keeping this separate from the
  * component keeps the JSX about *structure* and this file about *motion*.
  */
-import { EASE, ENV, FLAP_RELEASE_ANGLE, HERO, OPEN_RECENTRE, POSE, SEQ_OPEN, SEQ_SEAL, SEQ_SLIDE, SLIDE_DRIFT, SLIDE_FOLLOW, SLIDE_OUT, TICKET, TICKET_PEEK } from './constants'
-import { cubicBezier, lerp, linear, pathLerp, type Track } from './timeline'
+import { EASE, ENV, FLAP_RELEASE_ANGLE, HERO, OPEN_RECENTRE, POSE, SEQ_OPEN, SEQ_SEAL, SEQ_SLIDE, SEQ_TEAR, SLIDE_DRIFT, SLIDE_FOLLOW, SLIDE_OUT, TICKET, TICKET_PEEK, TORN } from './constants'
+import { cubicBezier, lerp, linear, pathLerp, settle, type Track } from './timeline'
 
 export type NodeMap = Map<string, Element>
 
@@ -392,6 +392,76 @@ export function buildTicketSlide(n: NodeMap): Track[] {
       update: (p) => {
         state.lift = p < 0.35 ? cubicBezier(0.3, 0, 0.3, 1)(p / 0.35) : 1 - cubicBezier(0.4, 0, 0.3, 1)((p - 0.35) / 0.65)
         writeShadow()
+        write()
+      },
+    },
+  ]
+}
+
+/* ------------------------------------------------------------------ Sequence B · part 2: the perforation tears */
+
+/**
+ * Tension → tear → separation.
+ *  - tension: the stub is pulled; it shifts a hair and starts to turn about the
+ *    bottom of the perforation (the last bridge to break)
+ *  - tear: the bridges between the holes break top → bottom; the fibre fringe
+ *    is revealed behind the tear front and the wedge between the pieces opens
+ *  - separate: the last bridge goes, the stub glides free to its F3 spacing
+ *    and turns back a little; the main ticket gives slightly the other way
+ * Offsets are in % of each piece's own box, so they hold at any scale.
+ */
+export function buildTear(n: NodeMap): Track[] {
+  const T = SEQ_TEAR
+  const main = n.get('ticket.main')
+  const stub = n.get('ticket.stub')
+  const fibres = [n.get('ticket.fibres.main'), n.get('ticket.fibres.stub')]
+  const pctMain = (units: number) => (units / TICKET.mainTexW) * 100
+  const pctStubX = (units: number) => (units / TICKET.stubTexW) * 100
+  const pctY = (units: number) => (units / TICKET.h) * 100
+
+  const s = { stubX: 0, stubY: 0, stubRot: 0, mainX: 0, mainRot: 0 }
+  const write = () => {
+    style(stub, 'transform', `translate(${s.stubX.toFixed(3)}%, ${s.stubY.toFixed(3)}%) rotate(${s.stubRot.toFixed(3)}deg)`)
+    style(main, 'transform', `translate(${s.mainX.toFixed(3)}%, 0) rotate(${s.mainRot.toFixed(3)}deg)`)
+  }
+  const wedge = 1.6 // deg the stub opens by the time the tear reaches the bottom
+
+  return [
+    {
+      at: T.tension.at,
+      dur: T.tension.dur,
+      ease: cubicBezier(0.5, 0, 0.5, 1),
+      update: (v) => {
+        s.stubX = pctStubX(1.2) * v
+        s.stubRot = 0.12 * v
+        s.mainX = pctMain(-0.4) * v
+        write()
+      },
+    },
+    {
+      at: T.tear.at,
+      dur: T.tear.dur,
+      ease: cubicBezier(0.42, 0, 0.62, 1), // catches, runs, eases into the last bridges
+      update: (v) => {
+        const front = v * 104
+        fibres.forEach((el) => {
+          ;(el as HTMLElement | undefined)?.style.setProperty('--tear', `${front.toFixed(2)}%`)
+          style(el, 'opacity', String(Math.min(1, v * 6)))
+        })
+        s.stubRot = 0.12 + (wedge - 0.12) * v
+        write()
+      },
+    },
+    {
+      at: T.separate.at,
+      dur: T.separate.dur,
+      ease: settle(0.05),
+      update: (v) => {
+        s.stubX = pctStubX(1.2 + (TORN.stubShift - 1.2) * v)
+        s.stubY = pctY(TORN.stubDrop) * v
+        s.stubRot = wedge + (TORN.stubTurn - wedge) * v
+        s.mainX = pctMain(-0.4 + (TORN.mainShift + 0.4) * v)
+        s.mainRot = -0.15 * Math.sin(Math.PI * Math.min(1, v * 1.2)) // gives a touch as it lets go
         write()
       },
     },

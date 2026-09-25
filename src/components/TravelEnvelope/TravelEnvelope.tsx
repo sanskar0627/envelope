@@ -15,8 +15,8 @@ import { Ticket } from './art/Ticket'
 import { Twine } from './art/Twine'
 import { WaxSeal } from './art/WaxSeal'
 import grainUrl from './textures/paper-grain.webp'
-import { ENV, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, SEQ_SEAL, TICKET, TICKET_INSIDE, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
-import { buildFlapOpen, buildSealBreak, buildTicketSlide, createRegistry } from './sequences'
+import { ENV, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, SEQ_SEAL, SEQ_TEAR, TICKET, TICKET_INSIDE, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
+import { buildFlapOpen, buildSealBreak, buildTear, buildTicketSlide, createRegistry } from './sequences'
 import { play, wait, type Playback } from './timeline'
 
 const VIEWBOX = `0 0 ${ENV.w} ${ENV.h}`
@@ -137,7 +137,12 @@ export function TravelEnvelope() {
     setPhase('sliding')
     playback.current = play(buildTicketSlide(nodes))
     if (!(await playback.current.finished)) return
-    // Step 5 continues from here: tension → tear → the stub separates.
+    // a breath in the hero pose, then the stub tears away
+    await wait(SEQ_TEAR.breath)
+    setPhase('tearing')
+    playback.current = play(buildTear(nodes))
+    if (!(await playback.current.finished)) return
+    setPhase('torn')
   }, [nodes])
 
   const onTicketClick = () => {
@@ -183,7 +188,7 @@ export function TravelEnvelope() {
             role={phase === 'open' ? 'button' : undefined}
             tabIndex={phase === 'open' ? 0 : -1}
             aria-label={phase === 'open' ? 'Pull the ticket out of the envelope' : undefined}
-            aria-hidden={phase === 'open' || phase === 'sliding' ? undefined : true}
+            aria-hidden={phase === 'sealed' || phase === 'pressing' || phase === 'opening' ? true : undefined}
             onClick={onTicketClick}
             onKeyDown={onTicketKey}
           >

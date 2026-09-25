@@ -312,6 +312,7 @@ def envelope_interior():
 TK_H, TK_MAIN, TK_STUB = 880, 1505, 440
 TK_SCALE = 1.25
 TK_HOLE_R, TK_HOLE_STEP = 6.5, 24
+TEAR_STRIP = 20  # half-width (units) of the torn-fibre overlays
 
 
 def ticket_sheet():
@@ -391,7 +392,44 @@ def ticket_sheet():
     stub_x0 = int(px - 6 * S) - 8
     stub = to_rgba_img(rgb[:, stub_x0:], (alpha * stub_mask)[:, stub_x0:])
     print(f"  ticket crop offsets (px @ x{S}): main 0..{split}, stub {stub_x0}..{W_}")
-    return main, stub
+
+    # torn-edge fibres: once the bridges between the holes break, each edge shows
+    # a fringe of lighter, fluffed-out fibres. One strip per piece, same sheet
+    # coordinates as the tear (TEAR_STRIP units either side of the perforation).
+    frng = np.random.default_rng(99)
+    half = int(TEAR_STRIP * S)
+    sx0 = int(px) - half
+    hole_ys = ys
+    strips = []
+    for side in (-1, 1):  # -1: main (fibres stick out to the right), +1: stub (to the left)
+        SS = 3  # supersample
+        img = Image.new("RGBA", (2 * half * SS, H_ * SS), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        # exposed, whiter paper core right at the torn edge
+        for yy in range(0, H_, 1):
+            near = np.min(np.abs(hole_ys - yy))
+            if near < hole_r * 0.95:
+                continue  # hole: nothing to tear here
+            ex = (tear_x[yy] - sx0) * SS
+            band = (1.2 + frng.random() * 1.6) * S * SS
+            x0, x1 = (ex - band, ex) if side < 0 else (ex, ex + band)
+            d.line([(x0, yy * SS), (x1, yy * SS)], fill=(246, 238, 222, int(150 + frng.random() * 70)), width=SS)
+        # fibres fluffing out past the edge
+        for _ in range(int(H_ * 1.6)):
+            yy = frng.uniform(0, H_)
+            if np.min(np.abs(hole_ys - yy)) < hole_r * 0.9:
+                continue
+            ex = tear_x[int(min(H_ - 1, yy))] - sx0
+            L = frng.uniform(1.0, 5.5) * S
+            ang = frng.normal(0, 0.55)
+            dx = -side * math.cos(ang) * L  # outward from the piece
+            dy = math.sin(ang) * L
+            start = ex + side * frng.uniform(0, 1.2) * S  # rooted just inside the paper
+            tone = int(frng.uniform(215, 250))
+            d.line([(start * SS, yy * SS), ((start + dx) * SS, (yy + dy) * SS)], fill=(tone, tone - 8, tone - 22, int(frng.uniform(110, 220))), width=max(1, int(0.5 * S * SS)))
+        img = img.resize((2 * half, H_), Image.LANCZOS)
+        strips.append(img)
+    return main, stub, strips[0], strips[1]
 
 
 # --------------------------------------------------------------------------- environment + utility tiles
@@ -467,9 +505,11 @@ if __name__ == "__main__":
     if want("interior"):
         save_webp(envelope_interior(), "envelope-interior.webp", q=90)
     if want("ticket"):
-        main, stub = ticket_sheet()
+        main, stub, fib_main, fib_stub = ticket_sheet()
         save_webp(main, "ticket-main.webp", q=92)
         save_webp(stub, "ticket-stub.webp", q=92)
+        save_webp(fib_main, "tear-fibres-main.webp", q=90)
+        save_webp(fib_stub, "tear-fibres-stub.webp", q=90)
     if want("desk"):
         save_webp(desk_tile(), "desk-linen.webp", q=82)
     if want("ink"):

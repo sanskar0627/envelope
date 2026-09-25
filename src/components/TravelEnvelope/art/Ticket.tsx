@@ -9,7 +9,7 @@
  *
  * Layout measured from reference F3 (see PROGRESS.md §2).
  */
-import { TICKET } from '../constants'
+import { TEAR_STRIP, TICKET } from '../constants'
 import photoUrl from '../textures/ticket-photo.webp'
 import { RingText } from './PostalArt'
 import { wavePath } from './geometry'
@@ -159,6 +159,7 @@ function Stub() {
 type Register = (name: string) => (el: Element | null) => void
 
 const pct = (v: number) => `${(v / TICKET.w) * 100}%`
+const pctOf = (v: number, of: number) => `${(v / of) * 100}%`
 
 /**
  * Both pieces of the ticket. Positioned inside a `.te-ticket` box whose
@@ -183,6 +184,12 @@ export function Ticket({ register }: { register: Register }) {
           <PhotoPostmark />
         </svg>
         <div className="te-ticket__light" />
+        {/* fluffed fibres along the torn edge — revealed top → bottom as it tears */}
+        <div
+          ref={register('ticket.fibres.main')}
+          className="te-ticket__fibres te-ticket__fibres--main"
+          style={{ left: pctOf(TICKET.main - TEAR_STRIP, TICKET.mainTexW), width: pctOf(TEAR_STRIP * 2, TICKET.mainTexW) }}
+        />
       </div>
       <div
         ref={register('ticket.stub')}
@@ -193,6 +200,11 @@ export function Ticket({ register }: { register: Register }) {
           <Stub />
         </svg>
         <div className="te-ticket__light" />
+        <div
+          ref={register('ticket.fibres.stub')}
+          className="te-ticket__fibres te-ticket__fibres--stub"
+          style={{ left: pctOf(TICKET.main - TEAR_STRIP - TICKET.stubTexX, TICKET.stubTexW), width: pctOf(TEAR_STRIP * 2, TICKET.stubTexW) }}
+        />
       </div>
     </>
   )
