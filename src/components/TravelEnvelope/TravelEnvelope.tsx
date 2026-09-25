@@ -15,9 +15,9 @@ import { Ticket } from './art/Ticket'
 import { Twine } from './art/Twine'
 import { WaxSeal } from './art/WaxSeal'
 import grainUrl from './textures/paper-grain.webp'
-import { ENV, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, SEQ_SEAL, SEQ_TEAR, TICKET, TICKET_INSIDE, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
-import { buildFlapOpen, buildSealBreak, buildTear, buildTicketSlide, createRegistry } from './sequences'
-import { play, wait, type Playback } from './timeline'
+import { ENV, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, OPEN_RECENTRE, SEQ_SEAL, SEQ_TEAR, TICKET, TICKET_INSIDE, TICKET_PEEK, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
+import { BASE, buildFlapOpen, buildSealBreak, buildTear, buildTicketSlide, createRegistry } from './sequences'
+import { play, wait, type Playback, type PlayOptions, type Track } from './timeline'
 
 const VIEWBOX = `0 0 ${ENV.w} ${ENV.h}`
 const flapPoints = FLAP_POLY.map(([x, y]) => `${x},${y}`).join(' ')
@@ -84,11 +84,30 @@ export function TravelEnvelope() {
   const [pressed, setPressed] = useState(false)
 
   /* ---- DOM registry: the timeline writes straight to these nodes ---- */
-  const [{ nodes, register }] = useState(createRegistry)
+  const [{ nodes, register, snapshot, restore }] = useState(createRegistry)
 
   const playback = useRef<Playback | null>(null)
   const pressStart = useRef(0)
-  useEffect(() => () => playback.current?.cancel(), [])
+  /** the exact tracks each sequence ran with — Reseal plays them backwards */
+  const ran = useRef<Partial<Record<'seal' | 'open' | 'slide' | 'tear', Track[]>>>({})
+  const phaseRef = useRef<Phase>('sealed')
+  useEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
+
+  /** play + remember; honours reduced motion by compressing time */
+  const run = useCallback(async (key: 'seal' | 'open' | 'slide' | 'tear', tracks: Track[], opts: PlayOptions = {}) => {
+    if (!opts.reverse) ran.current[key] = tracks
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    playback.current = play(tracks, { ...opts, speed: (opts.speed ?? 1) * (reduced ? 3 : 1) })
+    return playback.current.finished
+  }, [])
+
+  // the rest pose is recorded once, so a replay always lands pixel-identical
+  useEffect(() => {
+    snapshot()
+    return () => playback.current?.cancel()
+  }, [snapshot])
 
   /* ---- Sequence A · part 1: press → crack → release → twine off → flap lifts ---- */
   const breakSeal = useCallback(async () => {
@@ -97,13 +116,11 @@ export function TravelEnvelope() {
     if (remaining > 0) await wait(remaining)
     setPressed(false) // the wax rebounds (CSS) on the same beat the fracture starts
     setPhase('opening')
-    playback.current = play(buildSealBreak(nodes))
-    if (!(await playback.current.finished)) return
+    if (!(await run('seal', buildSealBreak(nodes)))) return
     // … and without a pause the freed flap swings open on its fold
-    playback.current = play(buildFlapOpen(nodes))
-    if (!(await playback.current.finished)) return
+    if (!(await run('open', buildFlapOpen(nodes)))) return
     setPhase('open')
-  }, [nodes])
+  }, [nodes, run])
 
   const startPress = () => {
     pressStart.current = performance.now()
@@ -134,16 +151,73 @@ export function TravelEnvelope() {
 
   /* ---- Sequence B: click the ticket → it slides out, the envelope sinks away, the ticket comes to the hero pose ---- */
   const pullTicket = useCallback(async () => {
+    const byKeyboard = document.activeElement === nodes.get('ticket')
     setPhase('sliding')
-    playback.current = play(buildTicketSlide(nodes))
-    if (!(await playback.current.finished)) return
+    if (!(await run('slide', buildTicketSlide(nodes)))) return
     // a breath in the hero pose, then the stub tears away
     await wait(SEQ_TEAR.breath)
     setPhase('tearing')
-    playback.current = play(buildTear(nodes))
-    if (!(await playback.current.finished)) return
+    if (!(await run('tear', buildTear(nodes)))) return
     setPhase('torn')
+    if (byKeyboard) requestAnimationFrame(() => (nodes.get('reseal') as HTMLElement | undefined)?.focus())
+  }, [nodes, run])
+
+  /* ---- Sequence C: Reseal — everything runs backwards to the sealed envelope ---- */
+  const reseal = useCallback(async () => {
+    if (phaseRef.current !== 'torn') return
+    const byKeyboard = document.activeElement === nodes.get('reseal')
+    setPhase('resealing')
+    const back: Array<['seal' | 'open' | 'slide' | 'tear', number]> = [
+      ['tear', 1.8],
+      ['slide', 1.5],
+      ['open', 1.6],
+      ['seal', 1.9],
+    ]
+    for (const [key, speed] of back) {
+      const tracks = ran.current[key]
+      if (tracks && !(await run(key, tracks, { reverse: true, speed }))) return
+    }
+    restore() // exact rest pose (clears every inline value the animation wrote)
+    ran.current = {}
+    setPressed(false)
+    setPhase('sealed')
+    if (byKeyboard) requestAnimationFrame(() => (nodes.get('sealButton') as HTMLElement | undefined)?.focus())
+  }, [nodes, run, restore])
+
+  /* ---- Resize: poses measured in px are re-fitted; animations re-fit when they finish ---- */
+  useEffect(() => {
+    let raf = 0
+    const refit = () => {
+      const ph = phaseRef.current
+      const u = ((nodes.get('envelope') as HTMLElement | undefined)?.offsetWidth ?? ENV.w) / ENV.w
+      const ticket = nodes.get('ticket') as HTMLElement | undefined
+      if (ph === 'open' && ticket) ticket.style.transform = BASE.ticket(0, -TICKET_PEEK * u)
+      if (ph === 'torn') {
+        // put the scene back in its open pose, re-measure, and jump the slide to its end
+        const scene = nodes.get('scene') as HTMLElement
+        const env = nodes.get('envelope') as HTMLElement
+        scene.style.transform = `translateY(${(OPEN_RECENTRE * ENV.h * u).toFixed(2)}px)`
+        env.style.transform = `rotateZ(${POSE.rotateZ}deg)`
+        if (ticket) ticket.style.transform = BASE.ticket(0, -TICKET_PEEK * u)
+        const tracks = buildTicketSlide(nodes)
+        tracks.forEach((t) => t.update((t.ease ?? ((x: number) => x))(1)))
+        ran.current.slide = tracks
+      }
+    }
+    const onResize = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(refit)
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      cancelAnimationFrame(raf)
+    }
   }, [nodes])
+  // a resize during an animation is caught up once it settles
+  useEffect(() => {
+    if (phase === 'open' || phase === 'torn') window.dispatchEvent(new Event('resize'))
+  }, [phase])
 
   const onTicketClick = () => {
     if (phase === 'open') void pullTicket()
@@ -161,7 +235,7 @@ export function TravelEnvelope() {
   const hint = HINT[phase]
 
   return (
-    <section className="te-stage" data-phase={phase} aria-label="Travel envelope from Santorini, Greece">
+    <section ref={register('root')} className="te-stage" data-phase={phase} aria-label="Travel envelope from Santorini, Greece">
       {/* shared clip for the pocket mouth (objectBoundingBox = responsive) */}
       <svg className="te-defs" width="0" height="0" aria-hidden="true" focusable="false">
         <clipPath id="te-pocket-clip" clipPathUnits="objectBoundingBox">
@@ -187,7 +261,8 @@ export function TravelEnvelope() {
             style={TICKET_BOX}
             role={phase === 'open' ? 'button' : undefined}
             tabIndex={phase === 'open' ? 0 : -1}
-            aria-label={phase === 'open' ? 'Pull the ticket out of the envelope' : undefined}
+            aria-label={phase === 'open' ? 'Pull the ticket out of the envelope' : phase === 'torn' ? 'Boarding pass, Santorini to JTR, seat 17A, 12 June 2023' : undefined}
+            aria-roledescription={phase === 'torn' ? 'ticket' : undefined}
             aria-hidden={phase === 'sealed' || phase === 'pressing' || phase === 'opening' ? true : undefined}
             onClick={onTicketClick}
             onKeyDown={onTicketKey}
@@ -309,6 +384,7 @@ export function TravelEnvelope() {
             <WaxSeal part="body" layer="chip" register={register} />
           </div>
           <button
+            ref={register('sealButton')}
             type="button"
             className="te-seal"
             style={SEAL_BOX}
@@ -327,6 +403,19 @@ export function TravelEnvelope() {
           {hint ?? HINT.sealed}
         </p>
       </div>
+
+      <button
+        ref={register('reseal')}
+        type="button"
+        className="te-reseal"
+        data-visible={phase === 'torn' ? 'true' : 'false'}
+        disabled={phase !== 'torn'}
+        aria-hidden={phase === 'torn' ? undefined : true}
+        tabIndex={phase === 'torn' ? 0 : -1}
+        onClick={() => void reseal()}
+      >
+        Reseal
+      </button>
     </section>
   )
 }

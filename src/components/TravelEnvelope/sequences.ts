@@ -27,7 +27,28 @@ export function createRegistry() {
     }
     return fn
   }
-  return { nodes, register }
+  /*
+   * Rest-pose snapshot. Every attribute the choreography writes is recorded
+   * once, at rest; `restore()` puts all of them back, so a replay always
+   * returns to a pixel-identical sealed envelope, however it was interrupted.
+   */
+  const ANIMATED = ['style', 'transform', 'opacity', 'stroke-dashoffset', 'stroke-dasharray', 'd'] as const
+  let snap: Array<[Element, Array<string | null>]> | null = null
+  const snapshot = () => {
+    const root = nodes.get('root')
+    if (!root) return
+    snap = Array.from(root.querySelectorAll('*'), (el) => [el, ANIMATED.map((a) => el.getAttribute(a))] as [Element, Array<string | null>])
+  }
+  const restore = () => {
+    snap?.forEach(([el, vals]) =>
+      ANIMATED.forEach((a, i) => {
+        const v = vals[i]
+        if (v === null) el.removeAttribute(a)
+        else if (el.getAttribute(a) !== v) el.setAttribute(a, v)
+      }),
+    )
+  }
+  return { nodes, register, snapshot, restore }
 }
 
 const ease = (k: keyof typeof EASE) => {
@@ -160,7 +181,11 @@ export function buildSealBreak(n: NodeMap): Track[] {
     dur: T.retract.dur,
     ease: cubicBezier(0.3, 0.5, 0.25, 1), // released tension: fast whip, friction brakes it
     update: (v) => {
-      if (v === 0 && !lengths) return
+      if (v === 0) {
+        paths.forEach((el) => el.removeAttribute('stroke-dasharray')) // whole again
+        style(twineSvg, 'opacity', '1')
+        return
+      }
       lengths ??= paths.map((el) => el.getTotalLength())
       // the last few units are the wrap round the paper edge: gone from view
       style(twineSvg, 'opacity', String(v < 0.88 ? 1 : Math.max(0, (1 - v) / 0.12)))

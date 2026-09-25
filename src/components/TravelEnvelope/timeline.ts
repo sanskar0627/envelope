@@ -89,36 +89,51 @@ export interface Playback {
   cancel: () => void
 }
 
+export interface PlayOptions {
+  /** playback rate (2 = twice as fast) */
+  speed?: number
+  /** play the same tracks backwards, ending exactly at their start values */
+  reverse?: boolean
+}
+
+/** Longest step the clock may take in one frame (ms). A background tab or a
+ * long frame slows the motion down instead of making it jump. */
+const MAX_STEP = 64
+
 /**
- * Plays tracks on a shared clock. Every track is written once at t = 0 (so the
- * starting pose is exact) and once at its end (so the final pose is exact
+ * Plays tracks on a shared clock. Every track is written once at the start (so
+ * the starting pose is exact) and once at its end (so the final pose is exact
  * regardless of frame timing). Resolves `true` when complete, `false` if cancelled.
  */
-export function play(tracks: Track[], { speed = 1 }: { speed?: number } = {}): Playback {
+export function play(tracks: Track[], { speed = 1, reverse = false }: PlayOptions = {}): Playback {
   const total = Math.max(...tracks.map((t) => t.at + t.dur))
   let raf = 0
   let cancelled = false
   let resolveFn: (v: boolean) => void = () => {}
   const finished = new Promise<boolean>((r) => (resolveFn = r))
   const done = new Array(tracks.length).fill(false)
-  let start = -1
+  let last = -1
+  let elapsed = 0
+
+  const progress = (tr: Track, t: number) => (tr.dur <= 0 ? (t >= tr.at ? 1 : 0) : Math.min(1, Math.max(0, (t - tr.at) / tr.dur)))
 
   const frame = (now: number) => {
     if (cancelled) return
-    if (start < 0) start = now
-    const t = (now - start) * speed
+    if (last >= 0) elapsed += Math.min(MAX_STEP, now - last) * speed
+    last = now
+    const t = reverse ? total - elapsed : elapsed
     for (let i = 0; i < tracks.length; i++) {
       if (done[i]) continue
       const tr = tracks[i]
-      const p = tr.dur <= 0 ? (t >= tr.at ? 1 : 0) : Math.min(1, Math.max(0, (t - tr.at) / tr.dur))
+      const p = progress(tr, t)
       tr.update((tr.ease ?? linear)(p))
-      if (p >= 1) done[i] = true
+      if (reverse ? p <= 0 : p >= 1) done[i] = true
     }
-    if (t >= total) resolveFn(true)
+    if (elapsed >= total) resolveFn(true)
     else raf = requestAnimationFrame(frame)
   }
 
-  for (const tr of tracks) tr.update((tr.ease ?? linear)(0))
+  for (const tr of tracks) tr.update((tr.ease ?? linear)(reverse ? 1 : 0))
   raf = requestAnimationFrame(frame)
 
   return {

@@ -524,7 +524,68 @@
   transform: scaleX(-1);
 }
 
+/* ------------------------------------------------------------------ reseal */
+
+.te-reseal {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(24px, 7vh, 64px);
+  transform: translate(-50%, 0);
+  padding: 0.5em 1.1em;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(16px, 1.5vw, 21px);
+  letter-spacing: 0.08em;
+  color: rgba(236, 220, 196, 0.7);
+  cursor: pointer;
+  transition:
+    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 240ms ease;
+}
+
+.te-reseal::after {
+  content: '';
+  position: absolute;
+  left: 1.1em;
+  right: 1.1em;
+  bottom: 0.35em;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.4;
+  transform: scaleX(0.4);
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 320ms ease;
+}
+
+.te-reseal:hover,
+.te-reseal:focus-visible {
+  color: rgba(246, 232, 210, 0.95);
+  outline: none;
+}
+
+.te-reseal:hover::after,
+.te-reseal:focus-visible::after {
+  transform: scaleX(1);
+  opacity: 0.6;
+}
+
+.te-reseal[data-visible='false'] {
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .te-reseal,
+  .te-hint,
+  .te-ticket__lift {
+    transition: none;
+  }
+
   .te-seal__svg,
   .te-seal__wax,
   .te-seal__shadow {
