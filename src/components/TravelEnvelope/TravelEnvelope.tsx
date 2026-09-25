@@ -16,7 +16,7 @@ import { Twine } from './art/Twine'
 import { WaxSeal } from './art/WaxSeal'
 import grainUrl from './textures/paper-grain.webp'
 import { ENV, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, SEQ_SEAL, TICKET, TICKET_INSIDE, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
-import { buildFlapOpen, buildSealBreak, createRegistry } from './sequences'
+import { buildFlapOpen, buildSealBreak, buildTicketSlide, createRegistry } from './sequences'
 import { play, wait, type Playback } from './timeline'
 
 const VIEWBOX = `0 0 ${ENV.w} ${ENV.h}`
@@ -132,6 +132,23 @@ export function TravelEnvelope() {
     if (e.key === ' ') e.preventDefault()
   }
 
+  /* ---- Sequence B: click the ticket → it slides out, the envelope sinks away, the ticket comes to the hero pose ---- */
+  const pullTicket = useCallback(async () => {
+    setPhase('sliding')
+    playback.current = play(buildTicketSlide(nodes))
+    if (!(await playback.current.finished)) return
+    // Step 5 continues from here: tension → tear → the stub separates.
+  }, [nodes])
+
+  const onTicketClick = () => {
+    if (phase === 'open') void pullTicket()
+  }
+  const onTicketKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (phase !== 'open' || (e.key !== 'Enter' && e.key !== ' ')) return
+    e.preventDefault()
+    void pullTicket()
+  }
+
   const sceneStyle = {
     '--pose-rz': `${POSE.rotateZ}deg`,
   } as CSSProperties
@@ -139,11 +156,7 @@ export function TravelEnvelope() {
   const hint = HINT[phase]
 
   return (
-    <section className="te-stage" aria-labelledby="travel-envelope-title" aria-describedby="travel-envelope-description">
-      <div className="te-context">
-        <h2 id="travel-envelope-title">A sealed letter from Santorini, Greece</h2>
-        <p id="travel-envelope-description">Press the wax seal to begin opening a tactile travel envelope with engraved postage, aged paper, twine, and a travel ticket.</p>
-      </div>
+    <section className="te-stage" data-phase={phase} aria-label="Travel envelope from Santorini, Greece">
       {/* shared clip for the pocket mouth (objectBoundingBox = responsive) */}
       <svg className="te-defs" width="0" height="0" aria-hidden="true" focusable="false">
         <clipPath id="te-pocket-clip" clipPathUnits="objectBoundingBox">
@@ -151,7 +164,7 @@ export function TravelEnvelope() {
         </clipPath>
       </svg>
       <div ref={register('scene')} className="te-scene" style={sceneStyle}>
-        <div className="te-envelope" data-phase={phase} data-press={pressed ? 'down' : 'up'}>
+        <div ref={register('envelope')} className="te-envelope" data-phase={phase} data-press={pressed ? 'down' : 'up'}>
           {/* ---- shadows on the desk ---- */}
           <div className="te-shadow te-shadow--ambient" aria-hidden="true" />
           <div className="te-shadow te-shadow--contact" aria-hidden="true" />
@@ -163,7 +176,18 @@ export function TravelEnvelope() {
           <div className="te-layer te-interior" aria-hidden="true">
             <div ref={register('interior.shade')} className="te-layer te-interior__shade" />
           </div>
-          <div ref={register('ticket')} className="te-ticket" style={TICKET_BOX}>
+          <div
+            ref={register('ticket')}
+            className="te-ticket"
+            style={TICKET_BOX}
+            role={phase === 'open' ? 'button' : undefined}
+            tabIndex={phase === 'open' ? 0 : -1}
+            aria-label={phase === 'open' ? 'Pull the ticket out of the envelope' : undefined}
+            aria-hidden={phase === 'open' || phase === 'sliding' ? undefined : true}
+            onClick={onTicketClick}
+            onKeyDown={onTicketKey}
+          >
+            <div ref={register('ticket.shadow')} className="te-ticket__shadow" />
             <div className="te-ticket__lift">
               <Ticket register={register} />
             </div>

@@ -3,7 +3,7 @@
  * that write to registered DOM nodes. Keeping this separate from the
  * component keeps the JSX about *structure* and this file about *motion*.
  */
-import { EASE, FLAP_RELEASE_ANGLE, OPEN_RECENTRE, SEQ_OPEN, SEQ_SEAL, TICKET, TICKET_PEEK } from './constants'
+import { EASE, ENV, FLAP_RELEASE_ANGLE, HERO, OPEN_RECENTRE, POSE, SEQ_OPEN, SEQ_SEAL, SEQ_SLIDE, SLIDE_DRIFT, SLIDE_FOLLOW, SLIDE_OUT, TICKET, TICKET_PEEK } from './constants'
 import { cubicBezier, lerp, linear, pathLerp, type Track } from './timeline'
 
 export type NodeMap = Map<string, Element>
@@ -40,12 +40,17 @@ export const BASE = {
   sealBody: 'translate(-50%, -50%) translateZ(2.4px)',
   sealFlap: 'translate(-50%, -50%) translateZ(2.6px)',
   /** perspective only while the flap is in motion (see CSS note on --persp); flat poses stay crisp */
-  flap: (deg: number) =>
-    deg === 0
-      ? 'translateZ(1px)'
-      : deg >= 180
-        ? 'translateZ(1px) rotateX(180deg)'
-        : `perspective(var(--persp)) translateZ(1px) rotateX(${deg}deg)`,
+  flap: (deg: number) => {
+    // closed, the flap lies ON the envelope (z 1); once over the top it lies on
+    // the desk (z -0.4), so a ticket drawn out of the pocket passes over it
+    const z = deg > 90 ? -0.4 : 1
+    if (deg === 0) return `translateZ(${z}px)`
+    if (deg >= 180) return `translateZ(${z}px) rotateX(180deg)`
+    return `perspective(var(--persp)) translateZ(${z}px) rotateX(${deg}deg)`
+  },
+  /** ticket, in its frame (px offsets are in the frame's rotated axes) */
+  ticket: (x: number, y: number, rot = 0, scale = 1, z = 0.3) =>
+    `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, ${z}px) rotate(${rot.toFixed(3)}deg) scale(${scale.toFixed(4)})`,
 } as const
 
 function style(el: Element | undefined, prop: 'transform' | 'opacity' | 'backgroundColor', value: string) {
@@ -250,7 +255,145 @@ export function buildFlapOpen(n: NodeMap): Track[] {
       at: T.peek.at,
       dur: T.peek.dur,
       ease: ease('out'),
-      update: (v) => style(n.get('ticket'), 'transform', `translateY(${((-TICKET_PEEK / TICKET.h) * 100 * v).toFixed(3)}%)`),
+      update: (v) => {
+        const u = pxPerUnit(n)
+        style(n.get('ticket'), 'transform', BASE.ticket(0, -TICKET_PEEK * u * v))
+      },
+    },
+  ]
+}
+
+/* ------------------------------------------------------------------ Sequence B: the ticket comes out */
+
+const pxPerUnit = (n: NodeMap) => ((n.get('envelope') as HTMLElement | undefined)?.offsetWidth ?? ENV.w) / ENV.w
+
+/** rotate a 2D vector by `deg` */
+function rot([x, y]: [number, number], deg: number): [number, number] {
+  const a = (deg * Math.PI) / 180
+  return [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)]
+}
+
+/**
+ * Click the ticket: grip → slide up out of the pocket (static friction, then a
+ * smooth pull) while the camera follows → the envelope sinks out of frame →
+ * the ticket is brought up to the hero pose (F3), lifting off the desk on the
+ * way (bigger, softer shadow) and settling back down.
+ *
+ * All targets are measured once, at the click, from the live layout.
+ */
+export function buildTicketSlide(n: NodeMap): Track[] {
+  const T = SEQ_SLIDE
+  const u = pxPerUnit(n)
+  const ticket = n.get('ticket') as HTMLElement
+  const scene = n.get('scene') as HTMLElement
+  const envelope = n.get('envelope') as HTMLElement
+  const shadow = n.get('ticket.shadow')
+  const envH = ENV.h * u
+
+  // --- measure: where the ticket is now, where the camera will be, where it must end up
+  const r0 = ticket.getBoundingClientRect()
+  const c0: [number, number] = [r0.left + r0.width / 2, r0.top + r0.height / 2]
+  const camFrom = OPEN_RECENTRE * envH
+  const camBy = SLIDE_FOLLOW * envH
+  const pose = POSE.rotateZ
+  // centre after the slide (screen): camera shift + the slide itself, rotated into screen axes
+  const slideLocal: [number, number] = [SLIDE_DRIFT * u, -(SLIDE_OUT - TICKET_PEEK) * u]
+  const slideScreen = rot(slideLocal, pose)
+  const c1: [number, number] = [c0[0] + slideScreen[0], c0[1] + camBy + slideScreen[1]]
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const target: [number, number] = [vw / 2, vh * HERO.centreY]
+  const baseW = TICKET.w * u
+  const wantW = Math.min(envelope.offsetWidth * HERO.widthOfEnvelope, vw * HERO.maxWidthOfViewport, (vh * HERO.maxHeightOfViewport * TICKET.w) / TICKET.h)
+  const heroScale = wantW / baseW
+  const heroLocal = rot([target[0] - c1[0], target[1] - c1[1]], -pose) // screen → frame axes
+  const heroRot = HERO.rotate - pose
+
+  // current offsets (the peek), in px
+  const peekY = -TICKET_PEEK * u
+  const state = { gy: 0, sx: 0, sy: 0, hx: 0, hy: 0, cx: 0, cy: 0, wobble: 0, rot: 0, scale: 1, lift: 0, z: 0.3 }
+  const write = () =>
+    style(
+      ticket,
+      'transform',
+      BASE.ticket(state.sx + state.hx + state.cx, peekY + state.gy + state.sy + state.hy + state.cy, state.wobble + state.rot, state.scale * (1 + 0.035 * state.lift), state.z),
+    )
+  const writeShadow = () => {
+    const L = state.lift
+    style(shadow, 'opacity', String(0.55 * L))
+    style(shadow, 'transform', `translate3d(${(18 * L).toFixed(1)}px, ${(34 * L).toFixed(1)}px, -0.2px) scale(${(1 + 0.03 * L).toFixed(3)})`)
+  }
+
+  const friction = cubicBezier(0.62, 0, 0.24, 1) // sticks, gives, glides out
+  const hump = (p: number) => Math.sin(Math.PI * p)
+
+  return [
+    {
+      // fingers press the ticket into the pocket before pulling
+      at: T.grip.at,
+      dur: T.grip.dur,
+      ease: ease('out'),
+      update: (v) => {
+        state.gy = 5 * u * hump(Math.min(1, v * 0.999))
+        write()
+      },
+    },
+    {
+      at: T.slide.at,
+      dur: T.slide.dur,
+      ease: friction,
+      update: (v) => {
+        state.sx = slideLocal[0] * v
+        state.sy = slideLocal[1] * v
+        state.wobble = -0.6 * hump(v) // the pull isn't perfectly straight
+        // clear of the mouth: from here on it is above everything on the desk
+        state.z = v >= 0.995 ? 8 : 0.3
+        write()
+      },
+    },
+    {
+      // the camera follows the hand, so the envelope drops away as the ticket rises
+      at: T.follow.at,
+      dur: T.follow.dur,
+      ease: friction,
+      update: (v) => style(scene, 'transform', `translateY(${(camFrom + camBy * v).toFixed(2)}px)`),
+    },
+    {
+      // released, the envelope sinks down and out of frame
+      at: T.sink.at,
+      dur: T.sink.dur,
+      ease: ease('gravity'),
+      update: (v) => {
+        const drop = v * (vh + envH)
+        style(envelope, 'transform', `translate3d(0, ${drop.toFixed(1)}px, 0) rotateZ(${pose}deg)`)
+        // the ticket is a child of the envelope: cancel the drop so it stays put on screen
+        ;[state.cx, state.cy] = rot([0, -drop], -pose)
+        write()
+      },
+    },
+    {
+      // … and the ticket is brought up to the hero pose, lifting off the desk on the way
+      at: T.hero.at,
+      dur: T.hero.dur,
+      ease: cubicBezier(0.45, 0.05, 0.2, 1),
+      update: (v) => {
+        state.hx = heroLocal[0] * v
+        state.hy = heroLocal[1] * v
+        state.rot = heroRot * v
+        state.scale = 1 + (heroScale - 1) * v
+        write()
+      },
+    },
+    {
+      // height above the desk: rises quickly, settles softly
+      at: T.hero.at - 150,
+      dur: T.hero.dur + 150,
+      ease: linear,
+      update: (p) => {
+        state.lift = p < 0.35 ? cubicBezier(0.3, 0, 0.3, 1)(p / 0.35) : 1 - cubicBezier(0.4, 0, 0.3, 1)((p - 0.35) / 0.65)
+        writeShadow()
+        write()
+      },
     },
   ]
 }

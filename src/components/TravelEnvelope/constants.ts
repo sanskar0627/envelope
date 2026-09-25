@@ -136,3 +136,23 @@ export const SEQ_OPEN = {
 
 /** How far the whole scene drifts down so the open flap stays in frame (fraction of envelope height). */
 export const OPEN_RECENTRE = 0.27
+
+/* ------------------------------------------------------------------ Sequence B (click the ticket) */
+
+/** ms from the click */
+export const SEQ_SLIDE = {
+  grip: { at: 0, dur: 150 },
+  slide: { at: 110, dur: 1050 },
+  follow: { at: 110, dur: 1150 },
+  sink: { at: 1080, dur: 900 },
+  hero: { at: 1110, dur: 1100 },
+} as const
+
+/** The ticket slides this far up (envelope units, from its resting spot) — enough to clear the pocket mouth. */
+export const SLIDE_OUT = 985
+/** …drifting this far right as it goes (the stub leads, as in F2). */
+export const SLIDE_DRIFT = 60
+/** The camera follows the pull so the ticket barely rises on screen (fraction of envelope height). */
+export const SLIDE_FOLLOW = 0.74
+/** Hero pose: final screen rotation (deg, F3), width relative to the envelope, vertical position in the viewport. */
+export const HERO = { rotate: 3.5, widthOfEnvelope: 1.08, maxWidthOfViewport: 0.9, maxHeightOfViewport: 0.62, centreY: 0.46 } as const
