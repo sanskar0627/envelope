@@ -15,7 +15,7 @@ import { useId } from 'react'
 import { ENV, FLAP_TIP, SEAL_VIEW, toSeal } from '../constants'
 import { blobPath, rng } from './geometry'
 
-const PUDDLE = blobPath(96, 7, 0.085, 40)
+const PUDDLE = blobPath(96, 7, 0.11, 26)
 const PUDDLE_INNER = blobPath(84, 11, 0.07, 48)
 /** thin film of wax that ran out onto the paper before it set */
 const SKIRT = blobPath(100, 19, 0.12, 20)
@@ -23,18 +23,62 @@ const HALF = SEAL_VIEW / 2
 
 /** Top-down propeller plane — the seal's emblem. */
 const EMBLEM = (() => {
-  // three-bladed propeller on a short shaft (the reference seal's device)
+  // three broad, rounded propeller blades on a hub (the reference seal's device):
+  // one up, two swept low and nearly horizontal, with the shaft running down between them
   const blade = (deg: number) => {
     const a = (deg * Math.PI) / 180
     const c = Math.cos(a)
     const sn = Math.sin(a)
     const pt = (x: number, y: number) => `${(x * c - y * sn).toFixed(2)} ${(x * sn + y * c).toFixed(2)}`
-    // teardrop blade from the hub outwards along -y
-    return `M${pt(-3, -6)} C${pt(-9, -14)} ${pt(-11, -30)} ${pt(-4, -36)} C${pt(-1, -38)} ${pt(3, -38)} ${pt(5, -34)} C${pt(9, -26)} ${pt(7, -13)} ${pt(3, -6)} Z`
+    // paddle blade: narrow at the hub, broad and rounded at the tip, along -y
+    return `M${pt(-3.2, -7)} C${pt(-7, -14)} ${pt(-11.5, -24)} ${pt(-10, -33)} C${pt(-8.5, -40)} ${pt(8.5, -40)} ${pt(10, -33)} C${pt(11.5, -24)} ${pt(7, -14)} ${pt(3.2, -7)} Z`
   }
-  return [blade(0), blade(120), blade(240)].join(' ')
+  return [blade(0), blade(104), blade(256)].join(' ')
 })()
-const EMBLEM_SHAFT = 'M-2.2 8 L2.2 8 L1.6 40 L-1.6 40 Z'
+/** shaft with a small arrow-head tail, pointing down */
+const EMBLEM_SHAFT = 'M-2.4 8 L2.4 8 L1.8 38 L6 38 L0 47 L-6 38 L-1.8 38 Z'
+
+/** hairline cracks crazing the set wax (seal space): short branching polylines, mostly on the flat die face */
+const CRAZE = (() => {
+  const r = rng(404)
+  const out: string[] = []
+  for (let k = 0; k < 16; k++) {
+    const a0 = r() * Math.PI * 2
+    const d0 = 10 + r() * 44
+    let x = Math.cos(a0) * d0
+    let y = Math.sin(a0) * d0
+    let dir = r() * Math.PI * 2
+    let d = `M${x.toFixed(1)} ${y.toFixed(1)}`
+    const steps = 3 + Math.floor(r() * 5)
+    for (let i = 0; i < steps; i++) {
+      dir += (r() - 0.5) * 1.3
+      const len = 3 + r() * 7
+      x += Math.cos(dir) * len
+      y += Math.sin(dir) * len
+      if (Math.hypot(x, y) > 58) break
+      d += ` L${x.toFixed(1)} ${y.toFixed(1)}`
+    }
+    out.push(d)
+  }
+  return out.join(' ')
+})()
+
+/** fine handling scratches: long, shallow, slightly curved (seal space) */
+const SCRATCHES = (() => {
+  const r = rng(515)
+  const out: string[] = []
+  for (let k = 0; k < 11; k++) {
+    const a = r() * Math.PI * 2
+    const d = r() * 60
+    const x = Math.cos(a) * d
+    const y = Math.sin(a) * d
+    const dir = r() * Math.PI
+    const len = 8 + r() * 22
+    const bend = (r() - 0.5) * 6
+    out.push(`M${x.toFixed(1)} ${y.toFixed(1)} q${(Math.cos(dir) * len * 0.5 - Math.sin(dir) * bend).toFixed(1)} ${(Math.sin(dir) * len * 0.5 + Math.cos(dir) * bend).toFixed(1)} ${(Math.cos(dir) * len).toFixed(1)} ${(Math.sin(dir) * len).toFixed(1)}`)
+  }
+  return out.join(' ')
+})()
 
 /** tiny bubbles and pits frozen in the surface (seal space, on the rim ring and outer puddle) */
 const PITS = (() => {
@@ -130,6 +174,8 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
   const shadow = `te-wax-shadow-${uid}`
   const clip = `te-wax-clip-${uid}`
   const puddleClip = `te-wax-puddle-${uid}`
+  const skirtClip = `te-wax-skirt-${uid}`
+  const soft = `te-wax-soft-${uid}`
   const region = part === 'flap' ? FLAP_REGION : BODY_REGION
   const r = (name: string) => register(`seal.${part}.${name}`)
 
@@ -142,6 +188,12 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
         <clipPath id={puddleClip}>
           <path d={PUDDLE} />
         </clipPath>
+        <clipPath id={skirtClip}>
+          <path d={SKIRT} />
+        </clipPath>
+        <filter id={soft} x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur stdDeviation="1.1" />
+        </filter>
         <filter id={shadow} x="-30%" y="-30%" width="160%" height="160%">
           <feGaussianBlur stdDeviation="5" />
         </filter>
@@ -151,27 +203,32 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
           <feColorMatrix in="relief" type="luminanceToAlpha" result="reliefA" />
           <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="dome" />
           <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="4" result="grain" />
-          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.02 0" result="grainA" />
+          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.009 0" result="grainA" />
           <feComposite in="reliefA" in2="dome" operator="arithmetic" k1="1.0" k2="0" k3="0" k4="0" result="h0" />
           <feComposite in="h0" in2="grainA" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="height" />
 
           <feDiffuseLighting in="height" surfaceScale="11" diffuseConstant="0.98" lightingColor="#fff0ea" result="diffuse">
             <feDistantLight azimuth="235" elevation="52" />
           </feDiffuseLighting>
-          <feSpecularLighting in="height" surfaceScale="11" specularConstant="1.5" specularExponent="48" lightingColor="#fff1e6" result="spec">
+          <feSpecularLighting in="height" surfaceScale="11" specularConstant="1.2" specularExponent="34" lightingColor="#ffe9dc" result="spec">
             <feDistantLight azimuth="235" elevation="50" />
           </feSpecularLighting>
-          <feSpecularLighting in="height" surfaceScale="11" specularConstant="0.35" specularExponent="6" lightingColor="#ff5a44" result="sheen">
+          <feSpecularLighting in="height" surfaceScale="11" specularConstant="0.5" specularExponent="44" lightingColor="#fff4ec" result="gloss">
+            <feDistantLight azimuth="228" elevation="46" />
+          </feSpecularLighting>
+          <feSpecularLighting in="height" surfaceScale="11" specularConstant="0.42" specularExponent="5" lightingColor="#ff3a2a" result="sheen">
             <feDistantLight azimuth="235" elevation="42" />
           </feSpecularLighting>
 
-          <feFlood floodColor="#7a0906" result="base" />
+          <feFlood floodColor="#690d08" result="base" />
           <feComposite in="base" in2="SourceAlpha" operator="in" result="baseIn" />
           <feComposite in="baseIn" in2="diffuse" operator="arithmetic" k1="1.02" k2="0" k3="0" k4="0" result="lit" />
           <feComposite in="sheen" in2="SourceAlpha" operator="in" result="sheenIn" />
           <feComposite in="spec" in2="SourceAlpha" operator="in" result="specIn" />
-          <feComposite in="lit" in2="sheenIn" operator="arithmetic" k1="0" k2="1" k3="0.28" k4="0" result="lit2" />
-          <feComposite in="lit2" in2="specIn" operator="arithmetic" k1="0" k2="1" k3="0.62" k4="0" result="glossy" />
+          <feComposite in="lit" in2="sheenIn" operator="arithmetic" k1="0" k2="1" k3="0.13" k4="0" result="lit2" />
+          <feComposite in="lit2" in2="specIn" operator="arithmetic" k1="0" k2="1" k3="0.5" k4="0" result="glossy0" />
+          <feComposite in="gloss" in2="SourceAlpha" operator="in" result="glossIn" />
+          <feComposite in="glossy0" in2="glossIn" operator="arithmetic" k1="0" k2="1" k3="0.55" k4="0" result="glossy" />
           <feComposite in="glossy" in2="SourceAlpha" operator="in" />
         </filter>
       </defs>
@@ -220,12 +277,32 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
               <circle r={61} fill="#7d7d7d" />
               <circle r={52} fill="#777" />
               <circle r={56} fill="none" stroke="#9a9a9a" strokeWidth={2.2} />
-              <path d={EMBLEM_SHAFT} fill="#a8a8a8" transform="rotate(-8)" />
-              <path d={EMBLEM} fill="#b4b4b4" transform="rotate(-8) scale(1.05)" />
-              <circle r={7} fill="#c8c8c8" />
+              {/* crazing: hairline grooves in the set wax */}
+              <path d={CRAZE} fill="none" stroke="#545454" strokeWidth={0.7} />
+              <g transform="rotate(-6)">
+                {/* the die squeezed the wax: a shallow moat of compressed wax around the device */}
+                <path d={EMBLEM} fill="none" stroke="#6c6c6c" strokeWidth={7} strokeLinejoin="round" />
+                <path d={EMBLEM_SHAFT} fill="none" stroke="#6c6c6c" strokeWidth={6} strokeLinejoin="round" />
+                <path d={EMBLEM_SHAFT} fill="#a4a4a4" />
+                {/* raised blades: a soft ramp up from the face so they read as domed, not outlined */}
+                <path d={EMBLEM} fill="#9c9c9c" stroke="#9c9c9c" strokeWidth={2.4} strokeLinejoin="round" />
+                <path d={EMBLEM} fill="#bcbcbc" transform="scale(0.9)" />
+                <path d={EMBLEM} fill="#cacaca" transform="scale(0.72)" />
+                <circle r={9} fill="#b0b0b0" />
+                <circle r={7.5} fill="none" stroke="#d6d6d6" strokeWidth={2} />
+                <circle r={3.2} fill="#8e8e8e" />
+              </g>
               {PITS.map(([x, y, pr], i) => (
                 <circle key={`p${i}`} cx={x} cy={y} r={pr} fill="#6a6a6a" opacity={0.7} />
               ))}
+            </g>
+            {/* thin wax at the melted edge lets light through: a warmer, lighter rim */}
+            <path d={SKIRT} fill="none" stroke="#c0301c" strokeWidth={3.4} opacity={0.32} filter={`url(#${soft})`} clipPath={`url(#${skirtClip})`} />
+            {/* hairline cracks and handling scratches in the set wax */}
+            <g clipPath={`url(#${puddleClip})`} fill="none" strokeLinecap="round">
+              <path d={CRAZE} stroke="#2a0302" strokeWidth={0.45} opacity={0.4} />
+              <path d={CRAZE} stroke="#ff9d86" strokeWidth={0.3} opacity={0.16} transform="translate(0.5 0.7)" />
+              <path d={SCRATCHES} stroke="#ffc2b0" strokeWidth={0.32} opacity={0.2} />
             </g>
             {/* broken edge of this piece: only visible once the halves part */}
             <g ref={r('fracture')} opacity={0} clipPath={`url(#${puddleClip})`}>

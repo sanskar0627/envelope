@@ -158,14 +158,14 @@ def apply_stains(rgb, dots, halo, rings):
     return out
 
 
-def tea_blotches(rgb, h, w, seed, amount=0.3, coverage=0.45):
+def tea_blotches(rgb, h, w, seed, amount=0.3, coverage=0.45, tint=(0.80, 0.56, 0.34)):
     """Large, soft, irregular peach/tea discolouration with faint tide-lines
     (the mottled ageing that dominates the reference envelope)."""
     brng = np.random.default_rng(seed)
     field = fft_noise(h, w, 1.75, brng) * 0.8 + band_noise(h, w, 1 / 160, 1 / 40, brng) * 0.35
     patches = smoothstep(1 - coverage - 0.1, 1 - coverage + 0.25, (field + 1) / 2)
     tide = np.clip(ndimage.gaussian_laplace(patches, 2.4) * -14, 0, 1)
-    tint = np.array([0.80, 0.56, 0.34])
+    tint = np.array(tint)
     out = rgb * (1 - patches[..., None] * amount) + tint * patches[..., None] * amount
     return out * (1 - tide[..., None] * 0.12)
 
@@ -295,7 +295,68 @@ def paper_photo(h, w, rng, base=(0.918, 0.815, 0.708)):
     return rgb * (1 - inc[..., None] * 0.55) + dark * inc[..., None] * 0.55
 
 
-def foxing(h, w, rng, clusters, spread=18):
+def crumple(h, w, rng, scale=1.0):
+    """The fine vein network of paper that was crumpled once and flattened:
+    zero-crossings of band noise make connected ridge lines; thinned with a
+    power so they read as sharp little folds rather than cloudiness.
+    Returns (height, vein) where vein 0..1 marks the fold lines."""
+    a = ridged(h, w, 1 / (46 * scale), 1 / (14 * scale), rng)
+    b = ridged(h, w, 1 / (20 * scale), 1 / (7 * scale), rng)
+    va = np.clip(a, 0, 1) ** 14
+    vb = np.clip(b, 0, 1) ** 18
+    # veins are patchy: some regions were flattened harder than others
+    patch = smoothstep(-0.1, 0.6, band_noise(h, w, 1 / 400, 1 / 120, rng))
+    vein = np.clip((va * 0.8 + vb * 0.25) * (0.25 + 0.75 * patch), 0, 1)
+    hgt = (va * 1.0 + vb * 0.2) * (0.3 + 0.7 * patch)
+    return hgt.astype(np.float32), vein.astype(np.float32)
+
+
+def folded_edge(h, w, sdf, rng, roll=7.0, rim=8.0, ticks=110):
+    """An envelope's outline is mostly FOLDS, not cuts: the paper rolls over the
+    edge, so there is a rounded ridge along the perimeter (catches the key light
+    on the top/left, falls into shade on the bottom/right), an abraded pale rim
+    where the fold has been rubbed (its width wanders), and small crush marks
+    running across the edge where it was pressed while handled.
+    Returns (height_add, rim_mask, crush_mask)."""
+    inside = np.clip(-sdf, 0, None)
+    wander = band_noise(h, w, 1 / 160, 1 / 30, rng)
+    ridge = np.exp(-inside / roll) * (0.75 + 0.25 * wander) * 7.0
+    rim_w = rim * (1 + 0.55 * wander) + 1.0
+    rim_mask = (1 - smoothstep(rim_w - 1.5, rim_w + 1.0, inside)) * (inside > 0.3)
+    # crush marks: short strokes across the edge, strongest right at the fold
+    img = Image.new("L", (w, h), 0)
+    d = ImageDraw.Draw(img)
+    for _ in range(ticks):
+        side = rng.integers(4)
+        t = rng.uniform(0.01, 0.99)
+        L = rng.uniform(5, 18)
+        a = rng.uniform(-0.5, 0.5)
+        if side == 0:
+            x0, y0, dx, dy = t * w, 2, math.sin(a), math.cos(a)
+        elif side == 1:
+            x0, y0, dx, dy = t * w, h - 2, math.sin(a), -math.cos(a)
+        elif side == 2:
+            x0, y0, dx, dy = 2, t * h, math.cos(a), math.sin(a)
+        else:
+            x0, y0, dx, dy = w - 2, t * h, -math.cos(a), math.sin(a)
+        d.line([(x0, y0), (x0 + dx * L, y0 + dy * L)], fill=int(rng.uniform(90, 200)), width=2)
+    crush = ndimage.gaussian_filter(np.asarray(img, np.float32) / 255, 1.3)
+    return (ridge - crush * 0.9).astype(np.float32), rim_mask.astype(np.float32), crush.astype(np.float32)
+
+
+def irregular_outline(sdf, rng, h, w, corner=18, wobble=2.6):
+    """Real paper is never a perfect rectangle: slow waviness along the edges,
+    softly rounded, crushed corners and a few small nicks."""
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    out = sdf + band_noise(h, w, 1 / 420, 1 / 90, rng) * wobble
+    for cx, cy in ((0, 0), (w, 0), (w, h), (0, h)):
+        dc = np.hypot(xx - cx, yy - cy)
+        out = out + np.clip(corner - dc, 0, None) * 0.7
+    nick = smoothstep(0.72, 0.95, band_noise(h, w, 1 / 26, 1 / 9, rng)) * 3.5
+    return out + nick * np.exp(-np.clip(-sdf, 0, None) / 4)
+
+
+def foxing(h, w, rng, clusters, spread=18, size=1.0):
     """Foxing: irregular rust spots with a dark core and a pale soft halo,
     grouped in clusters (they grow from impurities). Returns core, halo 0..1."""
     core = np.zeros((h, w), np.float32)
@@ -304,7 +365,7 @@ def foxing(h, w, rng, clusters, spread=18):
     for cx, cy, n in clusters:
         for _ in range(n):
             ox, oy = cx + rng.normal(0, spread), cy + rng.normal(0, spread * 0.8)
-            rad = rng.uniform(0.9, 4.2) * (2.2 if rng.random() < 0.12 else 1)
+            rad = rng.uniform(0.9, 4.2) * (2.2 if rng.random() < 0.12 else 1) * size
             x0, x1 = int(max(ox - rad * 5, 0)), int(min(ox + rad * 5, w))
             y0, y1 = int(max(oy - rad * 5, 0)), int(min(oy + rad * 5, h))
             if x1 <= x0 or y1 <= y0:
@@ -358,56 +419,79 @@ def corner_handling(h, w, rng, corners, radius=160):
 # --------------------------------------------------------------------------- envelope parts
 
 def envelope_body():
-    """Back of the envelope (Step 9: photographic pass)."""
+    """Back of the envelope (Step 10: matched to the photographed reference)."""
     rng = np.random.default_rng(1936)
     h, w = ENV_H, ENV_W
-    rgb = paper_photo(h, w, rng)
+    rgb = paper_photo(h, w, rng, base=(0.9, 0.862, 0.8))
 
-    # outline: slightly out of square, corners softened and bruised
     m = 5
     poly = [(m, m + 3), (w - m, m), (w - m - 2, h - m), (m + 2, h - m - 1)]
     sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 3.0)
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    for cx, cy in ((0, 0), (w, 0), (w, h), (0, h)):  # rounded, crushed corners
-        dc = np.hypot(xx - cx, yy - cy)
-        sdf = sdf + np.clip(14 - dc, 0, None) * 0.55
-
-    # relief: the ticket inside pillows the middle; hidden side-flap seams; handling creases
-    tip = (0.5 * w, 0.64 * h)
-    hgt = paper_relief(h, w, rng, creases=[
-                ((0.02 * w, 0.78 * h), (0.3 * w, 0.95 * h), 1.3, 3),                 # old handling crease
-        ((0.93 * w, 0.02 * h), (0.995 * w, 0.24 * h), 1.5, 3),               # corner fold
-        ((0.62 * w, 0.99 * h), (0.74 * w, 0.72 * h), 0.8, 2.5),
-    ], cockle=1.0, crinkle=1.0)
+    sdf = irregular_outline(sdf, rng, h, w, corner=26, wobble=5.0)
+    # mid-scale unevenness of the fold line itself (visible only up close)
+    sdf = sdf + band_noise(h, w, 1 / 70, 1 / 18, rng) * 1.2
     inside = np.clip(-sdf, 0, None)
-    pillow = (1 - np.exp(-inside / 90)) * 22                                    # contents lift the middle
-    hgt = hgt + pillow
-    shade = relief_light(hgt, strength=0.8)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    fold_h, rim_mask, crush = folded_edge(h, w, sdf, rng)
+    # how close to the perimeter (1 at the edge -> 0 in the middle): ageing concentrates here
+    edge_k = np.exp(-inside / 230)
 
-    # stains
+    # relief: gentle cockle + the crumpled vein network + handling creases + the pillow of the contents
+    hgt = paper_relief(h, w, rng, creases=[
+        ((0.02 * w, 0.78 * h), (0.3 * w, 0.95 * h), 0.8, 4.5),
+        ((0.93 * w, 0.02 * h), (0.995 * w, 0.24 * h), 1.2, 3.5),
+        ((0.62 * w, 0.99 * h), (0.74 * w, 0.72 * h), 0.6, 3.5),
+        ((0.0, 0.3 * h), (0.12 * w, 0.18 * h), 0.7, 3.5),
+        ((0.0, 0.93 * h), (0.07 * w, 0.99 * h), 1.4, 2.5),          # bent bottom-left corner
+        ((0.965 * w, h), (w, 0.86 * h), 1.2, 2.5),                  # bent bottom-right corner
+        ((0.04 * w, 0.62 * h), (0.16 * w, 0.99 * h), 0.5, 5),       # long soft wrinkles near the ends
+        ((0.9 * w, 0.4 * h), (0.99 * w, 0.95 * h), 0.5, 5),
+    ], cockle=1.0, crinkle=0.6)
+    ch, vein = crumple(h, w, rng)
+    vein = vein * (0.5 + 0.5 * edge_k)
+    hgt = hgt + ch * 0.45 + (1 - np.exp(-inside / 90)) * 22 + fold_h
+    shade = relief_light(hgt, strength=0.85)
+
+    # stains: a few believable, localized marks (not a sprinkle), mostly toward the ends
     clusters = [
-        (0.30 * w, 0.46 * h, 7), (0.34 * w, 0.66 * h, 6), (0.22 * w, 0.74 * h, 4), (0.09 * w, 0.42 * h, 5),
-        (0.97 * w, 0.93 * h, 12), (0.985 * w, 0.06 * h, 8), (0.29 * w, 0.92 * h, 5), (0.56 * w, 0.83 * h, 3),
-        (0.62 * w, 0.62 * h, 3), (0.12 * w, 0.95 * h, 4), (0.45 * w, 0.72 * h, 2), (0.88 * w, 0.52 * h, 3),
+        (0.06 * w, 0.38 * h, 5), (0.33 * w, 0.62 * h, 6), (0.27 * w, 0.9 * h, 4), (0.97 * w, 0.93 * h, 8),
+        (0.985 * w, 0.05 * h, 6), (0.03 * w, 0.88 * h, 3),
     ]
-    core, halo = foxing(h, w, rng, [(x, y, n * 2) for x, y, n in clusters])
-    water = water_stain(h, w, rng, 0.2 * w, 0.62 * h, 0.13 * w) * 0.5 + water_stain(h, w, rng, 0.8 * w, 0.9 * h, 0.09 * w) * 0.4
-    tea = np.array([0.80, 0.58, 0.37])
-    rust = np.array([0.70, 0.40, 0.21])
-    rgb = tea_blotches(rgb, h, w, 31, amount=0.3, coverage=0.46)
-    rgb = rgb * (1 - water[..., None] * 0.2) + tea * water[..., None] * 0.2
-    rgb = rgb * (1 - halo[..., None] * 0.22) + tea * halo[..., None] * 0.22
+    core, halo = foxing(h, w, rng, clusters, spread=18, size=1.9)
+    water = water_stain(h, w, rng, 0.14 * w, 0.62 * h, 0.12 * w) * 0.5
+    tea = np.array([0.78, 0.64, 0.47])
+    rust = np.array([0.64, 0.4, 0.22])
+    # uneven ageing: blotchy toning, much stronger toward the perimeter than in the middle
+    toned = tea_blotches(rgb, h, w, 31, amount=0.38, coverage=0.5, tint=(0.79, 0.64, 0.47))
+    k = (0.35 + 0.65 * edge_k)[..., None]
+    rgb = rgb * (1 - k) + toned * k
+    patch = np.exp(-(((xx - 0.07 * w) / (0.09 * w)) ** 2 + ((yy - 0.4 * h) / (0.2 * h)) ** 2)) * (0.6 + 0.4 * band_noise(h, w, 1 / 90, 1 / 25, rng))
+    rgb = rgb * (1 - patch[..., None] * 0.22) + tea * patch[..., None] * 0.22
+    rgb = rgb * (1 - water[..., None] * 0.26) + tea * water[..., None] * 0.26
+    rgb = rgb * (1 - halo[..., None] * 0.3) + tea * halo[..., None] * 0.3
     rgb = rgb * (1 - core[..., None] * 0.7) + rust * core[..., None] * 0.7
-    grime = corner_handling(h, w, rng, [(0, h, 0.35), (w, h, 0.25), (0, 0.5 * h, 0.12)], radius=210)
-    rgb = rgb * (1 - grime[..., None] * 0.12) + np.array([0.52, 0.45, 0.38]) * grime[..., None] * 0.12
-    rgb = edge_wear_v2(rgb, sdf, rng, h, w, width=40, strength=0.55)
+    # the whole perimeter is a touch darker (light-struck and handled for decades)
+    macro = np.exp(-inside / 160) * 0.07
+    rgb = rgb * (1 - macro[..., None])
+    grime = corner_handling(h, w, rng, [(0, h, 0.35), (w, h, 0.3), (w, 0, 0.3), (0, 0.5 * h, 0.12)], radius=210)
+    rgb = rgb * (1 - grime[..., None] * 0.14) + np.array([0.5, 0.4, 0.3]) * grime[..., None] * 0.14
+    # burnt, browned corners
+    for cx, cy, k in ((w, 0, 0.5), (w, h, 0.45), (0, h, 0.3)):
+        dc = np.hypot(xx - cx, yy - cy) + band_noise(h, w, 1 / 40, 1 / 10, rng) * 14
+        burn = (1 - smoothstep(10, 70, dc)) * k
+        rgb = rgb * (1 - burn[..., None]) + np.array([0.5, 0.3, 0.16]) * burn[..., None]
+    rgb = edge_wear_v2(rgb, sdf, rng, h, w, width=40, strength=0.5)
+    # grime settles in the fold lines
+    rgb = rgb * (1 - vein[..., None] * 0.045)
+    # abraded fold rim: roughed-up fibres read paler, with grime caught in the crush marks
+    rgb = rgb * (1 - rim_mask[..., None] * 0.34) + np.array([0.95, 0.92, 0.85]) * rim_mask[..., None] * 0.34
+    rgb = rgb * (1 - crush[..., None] * 0.18)
     rgb = rgb * shade[..., None]
 
-    # paper thickness: the lit top/left cut edges catch the key light
     rim = np.exp(-inside / 1.6) * (1 - smoothstep(0, 1, (xx / w + yy / h) * 0.9))
     rgb = rgb + rim[..., None] * 0.08
 
-    alpha = worn_alpha(sdf, rng, h, w, rough=3.0, feather=0.8)
+    alpha = worn_alpha(sdf, rng, h, w, rough=1.5, feather=0.75)
     return to_rgba_img(rgb, alpha)
 
 
@@ -415,33 +499,48 @@ def envelope_flap_outer():
     """Outside of the top flap: a separate sheet lying over the body."""
     rng = np.random.default_rng(2024)
     h, w = ENV_H, ENV_W
-    rgb = paper_photo(h, w, rng, base=(0.928, 0.826, 0.718))
+    rgb = paper_photo(h, w, rng, base=(0.915, 0.875, 0.81))
 
     tx, ty = FLAP_TIP[0] * w, FLAP_TIP[1] * h
     poly = [(2, 3), (w - 3, 1), (tx + 14, ty - 8), (tx, ty), (tx - 14, ty - 8)]
     sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 2.2)
-    inside = np.clip(-sdf, 0, None)
+    # the cut edge is never ruler-straight: slow waviness plus fine unevenness, a few compressed nicks
+    sdf = sdf + band_noise(h, w, 1 / 380, 1 / 80, rng) * 3.2 + band_noise(h, w, 1 / 60, 1 / 16, rng) * 1.1
+    sdf = sdf + smoothstep(0.75, 0.95, band_noise(h, w, 1 / 30, 1 / 10, rng)) * 2.5 * np.exp(-np.clip(-sdf, 0, None) / 4)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    # the hinge corners are folds too: rounded and slightly crushed, never a sharp point
+    for cx, cy in ((0, 0), (w, 0)):
+        dc = np.hypot(xx - cx, yy - cy)
+        sdf = sdf + np.clip(22 - dc, 0, None) * 0.75
+    inside = np.clip(-sdf, 0, None)
 
-    # relief: fold over the top edge, and the free edges curl up a little off the body
-    hgt = paper_relief(h, w, rng, creases=[((0.2 * w, 0.02 * h), (0.36 * w, 0.3 * h), 1.4, 2.2)], cockle=0.9, crinkle=1.0)
-    hinge_roll = np.exp(-yy / 14) * 10
+    hgt = paper_relief(h, w, rng, creases=[((0.2 * w, 0.02 * h), (0.36 * w, 0.3 * h), 1.4, 2.2)], cockle=0.9, crinkle=0.6)
+    ch, vein = crumple(h, w, rng)
+    hinge_roll = np.exp(-yy / 14) * 6
     curl = np.exp(-inside / 26) * 5.0 * (0.7 + 0.3 * band_noise(h, w, 1 / 300, 1 / 80, rng))
-    shade = relief_light(hgt + hinge_roll + curl, strength=0.8)
+    shade = relief_light(hgt + ch * 0.45 + hinge_roll + curl, strength=0.85)
 
-    clusters = [(0.24 * w, 0.2 * h, 9), (0.27 * w, 0.28 * h, 5), (0.12 * w, 0.07 * h, 4), (0.93 * w, 0.03 * h, 6), (0.4 * w, 0.12 * h, 2)]
-    core, halo = foxing(h, w, rng, [(x, y, n * 2) for x, y, n in clusters], spread=22)
-    tea = np.array([0.80, 0.58, 0.37])
-    rust = np.array([0.70, 0.40, 0.21])
-    rgb = tea_blotches(rgb, h, w, 57, amount=0.26, coverage=0.44)
-    wtr = water_stain(h, w, rng, 0.33 * w, 0.1 * h, 0.09 * w) * 0.45
-    rgb = rgb * (1 - wtr[..., None] * 0.2) + tea * wtr[..., None] * 0.2
-    rgb = rgb * (1 - halo[..., None] * 0.22) + tea * halo[..., None] * 0.22
-    rgb = rgb * (1 - core[..., None] * 0.72) + rust * core[..., None] * 0.72
-    rgb = edge_wear_v2(rgb, sdf, rng, h, w, width=26, strength=0.4)
+    clusters = [(0.29 * w, 0.14 * h, 6), (0.34 * w, 0.29 * h, 5), (0.93 * w, 0.03 * h, 5), (0.12 * w, 0.06 * h, 2)]
+    core, halo = foxing(h, w, rng, clusters, spread=20, size=1.9)
+    tea = np.array([0.78, 0.64, 0.47])
+    rust = np.array([0.64, 0.4, 0.22])
+    rgb = tea_blotches(rgb, h, w, 57, amount=0.24, coverage=0.44, tint=(0.79, 0.64, 0.47))
+    wtr = water_stain(h, w, rng, 0.33 * w, 0.12 * h, 0.1 * w) * 0.5
+    rgb = rgb * (1 - wtr[..., None] * 0.22) + tea * wtr[..., None] * 0.22
+    rgb = rgb * (1 - halo[..., None] * 0.26) + tea * halo[..., None] * 0.26
+    rgb = rgb * (1 - core[..., None] * 0.78) + rust * core[..., None] * 0.78
+    rgb = edge_wear_v2(rgb, sdf, rng, h, w, width=24, strength=0.42)
+    rgb = rgb * (1 - vein[..., None] * 0.045)
+    # abraded cut edge: a thin pale rim whose width wanders, then a faint grime line inside it
+    wander = band_noise(h, w, 1 / 140, 1 / 25, rng)
+    rim_w = 3.2 * (1 + 0.5 * wander) + 0.6
+    rim_mask = (1 - smoothstep(rim_w - 1.0, rim_w + 0.8, inside)) * (yy > 6)
+    rgb = rgb * (1 - rim_mask[..., None] * 0.2) + np.array([0.96, 0.93, 0.86]) * rim_mask[..., None] * 0.2
+    grime_line = np.exp(-((inside - rim_w - 1.2) ** 2) / 1.2) * 0.07 * (yy > 6)
+    rgb = rgb * (1 - grime_line[..., None])
     rgb = rgb * shade[..., None]
 
-    alpha = worn_alpha(sdf, rng, h, w, rough=2.2)
+    alpha = worn_alpha(sdf, rng, h, w, rough=1.3, feather=0.75)
     return to_rgba_img(rgb, alpha)
 
 

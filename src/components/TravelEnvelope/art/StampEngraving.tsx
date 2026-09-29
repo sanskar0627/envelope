@@ -91,17 +91,17 @@ export function VillageStampInk() {
   // houses cascading down below the crest (paper-white knock-outs)
   type House = { x: number; y: number; w: number; h: number }
   const houses: House[] = []
-  for (let t = 0.12; t < 0.98; t += 0.05) {
+  for (let t = 0.1; t < 0.98; t += 0.034) {
     const idx = t * (crest.length - 1)
     const i0 = Math.floor(idx)
     const i1 = Math.min(crest.length - 1, i0 + 1)
     const k = idx - i0
     const cu = crest[i0][0] + (crest[i1][0] - crest[i0][0]) * k
     const cv = crest[i0][1] + (crest[i1][1] - crest[i0][1]) * k
-    const rows = 2 + Math.floor(r() * 3) + (t > 0.4 ? 1 : 0)
+    const rows = 3 + Math.floor(r() * 3) + (t > 0.4 ? 2 : 0)
     for (let row = 0; row < rows; row++) {
-      const hw = 14 + r() * 14
-      const hh = 11 + r() * 9
+      const hw = 11 + r() * 11
+      const hh = 9 + r() * 7
       const hx = ix + cu * iw + (r() - 0.3) * 10
       const hy = iy + cv * ih + 4 + row * (hh + 3 + r() * 5)
       if (hy > iy + ih * 0.66 || hx + hw > ix + iw - 4) continue
@@ -123,7 +123,10 @@ export function VillageStampInk() {
 
   const clip = 'te-eng-village'
   return (
-    <g stroke={INK} fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <>
+    {/* plate slightly out of register on a second pass: a faint offset ghost of the linework */}
+    <use href="#te-eng-village-art" transform="translate(1.4 -0.9)" opacity={0.12} />
+    <g id="te-eng-village-art" stroke={INK} fill="none" strokeLinecap="round" strokeLinejoin="round">
       <defs>
         <clipPath id={`${clip}-img`}>
           <rect x={ix} y={iy} width={iw} height={ih} />
@@ -210,15 +213,15 @@ export function VillageStampInk() {
         {/* ---- sea: swell lines, heavier and wider apart toward the viewer, broken by glints ---- */}
         <path d={sea} fill="#fff" stroke="none" />
         <g clipPath={`url(#${clip}-sea)`}>
-          {Array.from({ length: 30 }, (_, i) => {
-            const t = i / 29
+          {Array.from({ length: 40 }, (_, i) => {
+            const t = i / 39
             const yy = iy + ih * HZ + 3 + (ih * (1 - HZ)) * (t * 0.35 + t * t * 0.65)
             const dash = `${f(30 + r() * 90)} ${f(3 + r() * 7)} ${f(20 + r() * 60)} ${f(2 + r() * 5)}`
             return (
               <path
                 key={`w${i}`}
                 d={wavePath(ix - 20, ix + iw * 0.62, yy, 0.7 + t * 2.4, 12 + t * 26, i * 1.7)}
-                strokeWidth={f(0.55 + t * 1.25)}
+                strokeWidth={f(0.7 + t * 1.4)}
                 strokeDasharray={dash}
                 strokeDashoffset={f(r() * 80)}
               />
@@ -247,7 +250,31 @@ export function VillageStampInk() {
           <path d={rules(ix + iw * 0.4, iy + ih * 0.35, iw * 0.35, ih * 0.7, 62, 3.4, 12, 0.5)} strokeWidth={0.75} />
           <path d={rules(ix + iw * 0.42, iy + ih * 0.55, iw * 0.3, ih * 0.5, -28, 4.2, 13, 0.5)} strokeWidth={0.65} opacity={0.85} />
           <path d={rules(ix + iw * 0.6, iy + ih * 0.1, iw * 0.45, ih * 0.9, 50, 5.5, 14, 0.5)} strokeWidth={0.6} opacity={0.7} />
+          {/* deepest shade low on the face: a third, finer hatch direction */}
+          <path d={rules(ix + iw * 0.44, iy + ih * 0.66, iw * 0.2, ih * 0.36, 8, 2.3, 15, 0.3)} strokeWidth={0.5} opacity={0.9} />
+          {/* stippled rock texture along the strata */}
+          {Array.from({ length: 140 }, (_, i) => (
+            <circle key={`dt${i}`} cx={f(ix + iw * (0.45 + r() * 0.55))} cy={f(iy + ih * (0.1 + r() * 0.9))} r={f(0.5 + r() * 0.6)} fill={INK} stroke="none" opacity={0.7} />
+          ))}
         </g>
+        {/* surf working along the foot of the cliff, and a few rocks awash */}
+        {Array.from({ length: 9 }, (_, i) => {
+          const t = i / 8
+          const u = 0.44 + 0.08 * t * t
+          const v = 0.66 + 0.36 * t
+          return <path key={`sf${i}`} d={`M${f(ix + iw * (u - 0.1))} ${f(iy + ih * v)} q${f(iw * 0.04)} ${f(-3)} ${f(iw * 0.09)} ${f(-1)}`} strokeWidth={0.7} strokeDasharray="6 3 10 2" />
+        })}
+        {[
+          [0.36, 0.78, 7],
+          [0.4, 0.9, 5],
+          [0.31, 0.95, 4],
+        ].map(([u, v, rr], i) => (
+          <g key={`rk${i}`}>
+            <path d={`M${f(ix + iw * u - rr * 1.6)} ${f(iy + ih * v)} q${f(rr * 0.4)} ${f(-rr * 1.3)} ${f(rr * 1.6)} ${f(-rr * 1.1)} q${f(rr * 1.2)} 0 ${f(rr * 1.6)} ${f(rr * 1.1)} Z`} fill="#fff" strokeWidth={1} />
+            {/* shaded flank of the rock */}
+            <path d={`M${f(ix + iw * u + rr * 0.5)} ${f(iy + ih * v - rr * 0.8)} l${f(rr * 0.5)} ${f(rr * 0.7)} M${f(ix + iw * u + rr * 0.9)} ${f(iy + ih * v - rr * 0.9)} l${f(rr * 0.5)} ${f(rr * 0.8)} M${f(ix + iw * u + rr * 0.1)} ${f(iy + ih * v - rr * 0.6)} l${f(rr * 0.4)} ${f(rr * 0.55)}`} strokeWidth={0.55} />
+          </g>
+        ))}
         <path d={curve(N(crest))} strokeWidth={1.8} />
         <path d={curve(N([[0.44, 0.66], [0.46, 0.76], [0.48, 0.86], [0.52, 1.02]]))} strokeWidth={1.4} />
 
@@ -332,6 +359,7 @@ export function VillageStampInk() {
         </text>
       </g>
     </g>
+    </>
   )
 }
 

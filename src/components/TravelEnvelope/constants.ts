@@ -134,6 +134,13 @@ export const SEQ_OPEN = {
   peek: { at: 980, dur: 620 },
 } as const
 
+/**
+ * Sealed framing: the closed envelope fills most of the frame (a product shot);
+ * fractions of the viewport, a px cap and a zoom cap. The camera eases back to
+ * scale 1 as the flap opens, so the open envelope still fits.
+ */
+export const SEALED_FRAME = { width: 0.84, height: 0.62, maxPx: 1320, maxZoom: 1.5 } as const
+
 /** How far the whole scene drifts down so the open flap stays in frame (fraction of envelope height). */
 export const OPEN_RECENTRE = 0.27
 

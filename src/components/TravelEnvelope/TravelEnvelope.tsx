@@ -8,7 +8,7 @@ import '@fontsource/inter/700.css'
 import '@fontsource/inter/800.css'
 import './TravelEnvelope.css'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent } from 'react'
 import { AddressBlock, AirmailCancel, GreeceCancel, StampPaper, TempleCancel, VillageStampInk, WaveStampInk } from './art/PostalArt'
 import { FlapRim, FlapShadow } from './art/FlapEdge'
@@ -17,7 +17,7 @@ import { Ticket } from './art/Ticket'
 import { Twine } from './art/Twine'
 import { WaxSeal } from './art/WaxSeal'
 import grainUrl from './textures/paper-grain.webp'
-import { ENV, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, OPEN_RECENTRE, SEQ_SEAL, SEQ_TEAR, TICKET, TICKET_INSIDE, TICKET_PEEK, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
+import { ENV, SEALED_FRAME, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, OPEN_RECENTRE, SEQ_SEAL, SEQ_TEAR, TICKET, TICKET_INSIDE, TICKET_PEEK, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
 import { BASE, buildFlapOpen, buildSealBreak, buildTear, buildTicketSlide, createRegistry } from './sequences'
 import { play, wait, type Playback, type PlayOptions, type Track } from './timeline'
 
@@ -186,6 +186,24 @@ export function TravelEnvelope() {
     if (byKeyboard) requestAnimationFrame(() => (nodes.get('sealButton') as HTMLElement | undefined)?.focus())
   }, [nodes, run, restore])
 
+  /* ---- Framing: the sealed envelope is shown close-up, like a product shot; the
+     camera pulls back to the full open view as the flap opens (see SEQ_OPEN.recentre).
+     The zoom lives on the root (outside the snapshot), so restore() never clears it. ---- */
+  useLayoutEffect(() => {
+    const root = nodes.get('root') as HTMLElement | undefined
+    const env = nodes.get('envelope') as HTMLElement | undefined
+    if (!root || !env) return
+    const fit = () => {
+      const w = env.offsetWidth
+      if (!w) return
+      const target = Math.min(window.innerWidth * SEALED_FRAME.width, window.innerHeight * SEALED_FRAME.height * ENV.w / ENV.h, SEALED_FRAME.maxPx)
+      root.style.setProperty('--zoom', Math.max(1, Math.min(SEALED_FRAME.maxZoom, target / w)).toFixed(4))
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [nodes])
+
   /* ---- Resize: poses measured in px are re-fitted; animations re-fit when they finish ---- */
   useEffect(() => {
     let raf = 0
@@ -247,6 +265,7 @@ export function TravelEnvelope() {
       <div ref={register('scene')} className="te-scene" style={sceneStyle}>
         <div ref={register('envelope')} className="te-envelope" data-phase={phase} data-press={pressed ? 'down' : 'up'}>
           {/* ---- shadows on the desk ---- */}
+          <div className="te-shadow te-shadow--far" aria-hidden="true" />
           <div className="te-shadow te-shadow--ambient" aria-hidden="true" />
           <div className="te-shadow te-shadow--contact" aria-hidden="true" />
 

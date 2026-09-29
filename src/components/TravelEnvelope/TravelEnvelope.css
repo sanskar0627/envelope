@@ -24,14 +24,16 @@
   isolation: isolate;
   color: #ecdcc4;
 
-  /* warm bookcloth desk, lit by a soft key from above-left */
-  background-color: #2a201a;
+  /* a dark, warm photographic tabletop: near-black, lit by one soft key from the upper left,
+     falling off into a deep vignette; the bookcloth weave is barely there */
+  background-color: #121110;
   background-image:
-    radial-gradient(ellipse 58% 48% at 46% 40%, rgba(255, 206, 158, 0.17), rgba(255, 206, 158, 0) 72%),
-    radial-gradient(ellipse 130% 95% at 50% 44%, rgba(0, 0, 0, 0) 42%, rgba(9, 5, 3, 0.62) 100%),
-    linear-gradient(172deg, rgba(255, 226, 190, 0.05), rgba(0, 0, 0, 0.2)),
+    radial-gradient(ellipse 60% 52% at 44% 42%, rgba(255, 220, 185, 0.075), rgba(255, 220, 185, 0) 70%),
+    radial-gradient(ellipse 120% 90% at 50% 46%, rgba(0, 0, 0, 0) 34%, rgba(3, 2, 2, 0.8) 100%),
+    linear-gradient(168deg, rgba(255, 230, 200, 0.035), rgba(0, 0, 0, 0.25)),
     url('./textures/desk-linen.webp');
   background-size: auto, auto, auto, 360px 360px;
+  background-blend-mode: normal, normal, normal, luminosity;
 }
 
 /* faint film grain so the gradients never band */
@@ -63,6 +65,13 @@
   --persp: calc(var(--env-w) * 2.6);
 }
 
+.te-scene {
+  /* sealed: close-up framing (--zoom); eases back to 1 as the flap opens.
+     No perspective at rest: Chrome rasterises perspective layers at reduced
+     resolution, which turns the paper, print and engraving soft (tested). */
+  transform: scale(var(--zoom, 1));
+}
+
 .te-envelope {
   position: relative;
   width: var(--env-w);
@@ -87,30 +96,40 @@
   border-radius: calc(var(--u) * 0.8);
 }
 
-/* broad, soft occlusion — the key light sits up and to the left */
-.te-shadow--ambient {
-  inset: 4% 3% 1% 4%;
-  background: rgba(10, 5, 2, 0.78);
-  filter: blur(calc(var(--u) * 3.2));
-  transform: translate3d(calc(var(--u) * 1.6), calc(var(--u) * 3.4), -2px);
-  opacity: 0.85;
+/* the widest, faintest falloff: the object darkens the tabletop around it */
+.te-shadow--far {
+  inset: -2% -3% -6% -2%;
+  background: rgba(4, 2, 1, 0.55);
+  filter: blur(calc(var(--u) * 7));
+  transform: translate3d(calc(var(--u) * 1.4), calc(var(--u) * 3.2), -3px);
+  border-radius: calc(var(--u) * 6);
 }
 
-/* tight contact shadow where the paper meets the desk */
+/* broad, soft occlusion — the key light sits up and to the left */
+.te-shadow--ambient {
+  inset: 3% 2% 0% 3%;
+  background: rgba(6, 3, 1, 0.82);
+  filter: blur(calc(var(--u) * 2.6));
+  transform: translate3d(calc(var(--u) * 1.1), calc(var(--u) * 2.2), -2px);
+}
+
+/* tight contact shadow where the paper meets the desk: darkest right under the edges */
 .te-shadow--contact {
-  inset: 0.6% 0.3% 0 0.6%;
-  background: rgba(12, 6, 2, 0.85);
-  filter: blur(calc(var(--u) * 0.45));
-  transform: translate3d(calc(var(--u) * 0.25), calc(var(--u) * 0.55), -1px);
+  inset: 0.5% 0.2% -0.2% 0.4%;
+  background: rgba(3, 1, 0, 0.92);
+  filter: blur(calc(var(--u) * 0.35));
+  transform: translate3d(calc(var(--u) * 0.2), calc(var(--u) * 0.42), -1px);
 }
 
 /* ------------------------------------------------------------------ paper */
 
 /* the envelope is a stack of paper: a darker rim peeks out along the lower-right edges */
 .te-edge {
+  /* the envelope's thickness (two sheets + the ticket): the shaded side faces show along
+     the lower and right edges, a little lighter where they catch bounce light from the desk */
   background: var(--paper-tex) 0 0 / 100% 100% no-repeat;
-  filter: brightness(0.58) sepia(0.35) saturate(1.1);
-  transform: translate3d(calc(var(--u) * 0.12), calc(var(--u) * 0.2), -0.5px);
+  filter: brightness(0.62) sepia(0.3) saturate(1.05);
+  transform: translate3d(calc(var(--u) * 0.2), calc(var(--u) * 0.34), -0.5px);
 }
 
 /* far wall of the envelope, seen through the open mouth */
@@ -286,7 +305,7 @@
 
 /* stamp paper glued to the envelope */
 .te-applied {
-  color: #eee2cb;
+  color: #eadcc1;
   filter: drop-shadow(0 calc(var(--u) * 0.06) calc(var(--u) * 0.08) rgba(70, 38, 14, 0.45))
     drop-shadow(calc(var(--u) * 0.12) calc(var(--u) * 0.22) calc(var(--u) * 0.3) rgba(70, 38, 14, 0.18));
 }
@@ -312,9 +331,9 @@
 /* ------------------------------------------------------------------ flap */
 
 .te-flap-shadow {
-  /* between the body (0.6px) and the flap (1px), so it lands on the body paper */
+  /* between the body (0.6px) and the flap (1px), so it lands on the body paper.
+     Normal blending: blend modes inside a preserve-3d stack can make Chrome flatten or mis-sort layers. */
   transform: translateZ(0.8px);
-  mix-blend-mode: multiply;
 }
 
 .te-flap {
@@ -337,6 +356,12 @@
 }
 
 .te-light--flap {
+  /* the flap is a sheet bent over the top fold: brightest where it rolls over the hinge,
+     falling slightly into shade as it curves down to meet the wax at its tip */
+  background:
+    linear-gradient(180deg, rgba(255, 249, 236, 0.16) 0%, rgba(255, 249, 236, 0) 16%, rgba(255, 249, 236, 0) 55%, rgba(80, 46, 18, 0.2) 100%),
+    radial-gradient(ellipse 70% 90% at 22% 8%, rgba(255, 250, 238, 0.45), rgba(255, 250, 238, 0) 62%),
+    linear-gradient(158deg, rgba(255, 246, 228, 0) 45%, rgba(92, 52, 22, 0.28) 100%);
   -webkit-mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
   mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
 }

@@ -27,6 +27,24 @@ export function RingText({ id, r, text, size, color, spacing = 4 }: { id: string
   )
 }
 
+/** a ring of tiny beads / ticks, as cut into the rubber of old datestamps */
+function Beads({ r, n, size, color, tick = false }: { r: number; n: number; size: number; color: string; tick?: boolean }) {
+  return (
+    <g fill={color} stroke={tick ? color : 'none'} strokeWidth={tick ? size : 0}>
+      {Array.from({ length: n }, (_, i) => {
+        const a = (i / n) * Math.PI * 2
+        const c = Math.cos(a)
+        const sn = Math.sin(a)
+        return tick ? (
+          <path key={i} d={`M${(c * (r - 3)).toFixed(1)} ${(sn * (r - 3)).toFixed(1)} L${(c * (r + 3)).toFixed(1)} ${(sn * (r + 3)).toFixed(1)}`} />
+        ) : (
+          <circle key={i} cx={(c * r).toFixed(1)} cy={(sn * r).toFixed(1)} r={size} />
+        )
+      })}
+    </g>
+  )
+}
+
 /* ------------------------------------------------------------------ postmark: temple (grey) */
 
 export function TempleCancel({ x, y, id }: { x: number; y: number; id: string }) {
@@ -34,8 +52,10 @@ export function TempleCancel({ x, y, id }: { x: number; y: number; id: string })
   return (
     <g transform={`translate(${x} ${y}) rotate(-6)`} stroke={INK} fill="none" opacity={0.82}>
       <circle r={158} strokeWidth={5.5} />
-      <circle r={147} strokeWidth={2.4} />
+      <Beads r={152} n={96} size={1.3} color={INK} />
+      <circle r={146} strokeWidth={2.2} />
       <circle r={103} strokeWidth={3.6} />
+      <circle r={108} strokeWidth={0.9} />
       <g stroke="none">
         <RingText id={`${id}-ring`} r={116} size={25} color={INK} text="SANTORINI ✦ THIRA ✦ CYCLADES ✦ 1937 ✦ " />
       </g>
@@ -51,6 +71,23 @@ export function TempleCancel({ x, y, id }: { x: number; y: number; id: string })
         {[-24, -14].map((yy, i) => (
           <path key={`r${i}`} d={`M${46 + i * 6} ${yy} l${14} ${6}`} strokeWidth={1.8} />
         ))}
+        {/* shaded mountain faces: short parallel strokes down the slopes */}
+        {Array.from({ length: 14 }, (_, i) => (
+          <path key={`mh${i}`} d={`M${-100 + i * 15} ${-14 - ((i * 37) % 22)} l${6} ${12}`} strokeWidth={1.2} opacity={0.85} />
+        ))}
+        {/* low sun and its rays behind the ridge */}
+        <circle cx={62} cy={-58} r={9} strokeWidth={1.6} />
+        {Array.from({ length: 9 }, (_, i) => {
+          const a = Math.PI + (i / 8) * Math.PI
+          return <path key={`sr${i}`} d={`M${(62 + Math.cos(a) * 13).toFixed(1)} ${(-58 + Math.sin(a) * 13).toFixed(1)} l${(Math.cos(a) * 6).toFixed(1)} ${(Math.sin(a) * 6).toFixed(1)}`} strokeWidth={1.1} />
+        })}
+        {/* cypresses either side */}
+        {[-86, 84].map((cx) => (
+          <g key={cx}>
+            <path d={`M${cx} 60 C${cx - 7} 40 ${cx - 6} 20 ${cx} 4 C${cx + 6} 20 ${cx + 7} 40 ${cx} 60 Z`} strokeWidth={1.6} />
+            <path d={`M${cx} 12 V58 M${cx - 3} 30 l3 -4 l3 4 M${cx - 4} 44 l4 -5 l4 5`} strokeWidth={0.9} />
+          </g>
+        ))}
         {/* pediment + entablature */}
         <path d="M-66 -2 L0 -30 L66 -2 Z" strokeWidth={3.2} />
         <path d="M-66 -2 H66 M-68 6 H68" strokeWidth={3.2} />
@@ -59,7 +96,7 @@ export function TempleCancel({ x, y, id }: { x: number; y: number; id: string })
           <g key={cx}>
             <path d={`M${cx - 6} 8 V58 M${cx + 6} 8 V58`} strokeWidth={2.6} />
             <path d={`M${cx - 9} 10 H${cx + 9} M${cx - 9} 57 H${cx + 9}`} strokeWidth={2.2} />
-            <path d={`M${cx} 14 V54`} strokeWidth={1.2} opacity={0.7} />
+            <path d={`M${cx - 2.5} 14 V54 M${cx + 2.5} 14 V54`} strokeWidth={0.8} opacity={0.75} />
           </g>
         ))}
         {/* stylobate steps */}
@@ -79,8 +116,10 @@ export function AirmailCancel({ x, y, id }: { x: number; y: number; id: string }
   return (
     <g transform={`translate(${x} ${y}) rotate(8)`} stroke={RED_INK} fill="none" opacity={0.78}>
       <circle r={164} strokeWidth={5.5} strokeDasharray="520 10 180 8 400 14" />
+      <Beads r={158} n={72} size={1.4} color={RED_INK} tick />
       <circle r={152} strokeWidth={2.4} />
       <circle r={108} strokeWidth={3.4} />
+      <circle r={102} strokeWidth={1} strokeDasharray="3 5" />
       <g stroke="none">
         <RingText id={`${id}-ring`} r={121} size={26} color={RED_INK} text="PAR AVION ✦ AIR MAIL ✦ THIRA ✦ HELLAS ✦ " />
       </g>
@@ -89,9 +128,9 @@ export function AirmailCancel({ x, y, id }: { x: number; y: number; id: string }
         <path
           d="M-78 6 C-60 -2 20 -8 58 -6 C72 -5 84 0 84 6 C84 12 70 14 56 14 L-56 14 C-68 14 -78 12 -78 6 Z"
           strokeWidth={3.4}
-          fill={RED_INK}
-          fillOpacity={0.18}
         />
+        {/* fuselage shading: engraved lines along the belly */}
+        <path d="M-60 10 H52 M-54 12.5 H44" strokeWidth={1} />
         <path d="M-70 4 L-86 -30 L-72 -30 L-50 2" strokeWidth={3.2} />
         <path d="M-10 8 L-40 46 L-22 46 L22 10" strokeWidth={3.2} />
         <path d="M-6 2 L-24 -26 L-12 -26 L14 2" strokeWidth={2.6} />
@@ -112,7 +151,7 @@ export function AirmailCancel({ x, y, id }: { x: number; y: number; id: string }
 
 export function GreeceCancel({ x, y }: { x: number; y: number }) {
   return (
-    <g transform={`translate(${x} ${y}) rotate(-4)`} stroke={INK} fill="none" opacity={0.8}>
+    <g transform={`translate(${x} ${y}) rotate(-4)`} stroke={INK} fill="none" opacity={0.64}>
       {/* cancellation bars running out across the stamp */}
       {[-70, -46, 46, 70].map((yy, i) => (
         <path key={yy} d={wavePath(140, 360, yy, 5, 46, i)} strokeWidth={3} strokeLinecap="round" />
@@ -182,6 +221,15 @@ export function StampPaper({ x, y, w, h, id, hole = 9, step = 28, rotate = 0 }: 
       {/* toned toward the edges, lit from the top-left */}
       <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill={`url(#${id}-age)`} mask={`url(#${id})`} style={{ mixBlendMode: 'multiply' }} />
       <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill={`url(#${id}-light)`} mask={`url(#${id})`} />
+      {/* torn perforation teeth: fibres crushed around each punched hole, a hint of the hole's wall on the far side */}
+      <g mask={`url(#${id})`} fill="none">
+        {holes.map(([hx, hy], i) => (
+          <circle key={i} cx={hx} cy={hy} r={hole + 0.9} stroke="#8c7456" strokeWidth={1.3} opacity={0.32} />
+        ))}
+        {holes.map(([hx, hy], i) => (
+          <circle key={`w${i}`} cx={hx - 0.5} cy={hy - 0.8} r={hole + 0.4} stroke="#fff8ea" strokeWidth={0.8} opacity={0.35} strokeDasharray={`${(hole * 1.6).toFixed(1)} ${(hole * 5).toFixed(1)}`} />
+        ))}
+      </g>
     </g>
   )
 }

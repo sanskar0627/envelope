@@ -13,9 +13,9 @@
  * individual so no two postmarks fade the same way.
  */
 
-type InkProps = { id: string; seed: number; wobble: number; tooth: number; pressure: [number, number]; pressureFreq?: number; bleed?: number; skip?: number }
+type InkProps = { id: string; seed: number; wobble: number; tooth: number; pressure: [number, number]; pressureFreq?: number; bleed?: number; skip?: number; toothAt?: number }
 
-function InkFilter({ id, seed, wobble, tooth, pressure, pressureFreq = 0.006, bleed = 0.35, skip = 5.15 }: InkProps) {
+function InkFilter({ id, seed, wobble, tooth, pressure, pressureFreq = 0.006, bleed = 0.35, skip = 5.15, toothAt = 0.69 }: InkProps) {
   const [pa, pb] = pressure
   return (
     <filter id={id} x="-4%" y="-4%" width="108%" height="108%" colorInterpolationFilters="sRGB">
@@ -27,7 +27,7 @@ function InkFilter({ id, seed, wobble, tooth, pressure, pressureFreq = 0.006, bl
       <feColorMatrix in="press" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ${pa} 0 0 0 ${pb}`} result="pressA" />
       {/* paper tooth: pin-holes where the fibres stood proud of the ink */}
       <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="1" seed={seed + 13} result="grain" />
-      <feColorMatrix in="grain" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ${-tooth} 0 0 0 ${(tooth * 0.69).toFixed(3)}`} result="toothA" />
+      <feColorMatrix in="grain" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ${-tooth} 0 0 0 ${(tooth * toothAt).toFixed(3)}`} result="toothA" />
       {/* larger bald patches where the rubber skipped */}
       <feTurbulence type="fractalNoise" baseFrequency="0.11" numOctaves="2" seed={seed + 29} result="skip" />
       <feColorMatrix in="skip" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  -7 0 0 0 ${skip}`} result="skipA" />
@@ -44,11 +44,11 @@ function InkFilter({ id, seed, wobble, tooth, pressure, pressureFreq = 0.006, bl
 export function InkFilterDefs() {
   return (
     <>
-      <InkFilter id="te-ink-temple" seed={3} wobble={3.2} tooth={10} pressure={[2.6, -0.3]} />
-      <InkFilter id="te-ink-air" seed={17} wobble={3.6} tooth={9} pressure={[2.4, -0.28]} pressureFreq={0.008} />
-      <InkFilter id="te-ink-greece" seed={41} wobble={3} tooth={10} pressure={[2.5, -0.28]} />
-      <InkFilter id="te-ink-intaglio" seed={5} wobble={1.1} tooth={12} pressure={[1.2, 0.35]} bleed={0.28} skip={5.6} />
-      <InkFilter id="te-ink-type" seed={61} wobble={0.9} tooth={6} pressure={[1.4, 0.3]} bleed={0.3} skip={5.8} />
+      <InkFilter id="te-ink-temple" seed={3} wobble={3.2} tooth={10} pressure={[2.6, -0.12]} />
+      <InkFilter id="te-ink-air" seed={17} wobble={3.6} tooth={9} pressure={[2.4, -0.16]} pressureFreq={0.008} />
+      <InkFilter id="te-ink-greece" seed={41} wobble={3.8} tooth={9} pressure={[2.6, -0.28]} pressureFreq={0.009} skip={5.05} />
+      <InkFilter id="te-ink-intaglio" seed={5} wobble={1.1} tooth={12} pressure={[1.0, 0.62]} bleed={0.28} skip={5.6} toothAt={0.74} />
+      <InkFilter id="te-ink-type" seed={61} wobble={0.6} tooth={6} toothAt={0.8} pressure={[0.9, 0.55]} bleed={0.32} skip={6.6} />
     </>
   )
 }

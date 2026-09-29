@@ -278,7 +278,13 @@ export function buildFlapOpen(n: NodeMap): Track[] {
       at: T.recentre.at,
       dur: T.recentre.dur,
       ease: ease('inOut'),
-      update: (v) => style(n.get('scene'), 'transform', `translateY(calc(var(--env-w) / 2.2 * ${(OPEN_RECENTRE * v).toFixed(4)}))`),
+      // …and pulls back from the close-up sealed framing (--zoom) to the full open view
+      update: (v) =>
+        style(
+          n.get('scene'),
+          'transform',
+          `translateY(calc(var(--env-w) / 2.2 * ${(OPEN_RECENTRE * v).toFixed(4)})) scale(calc(var(--zoom, 1) + (1 - var(--zoom, 1)) * ${v.toFixed(4)}))`,
+        ),
     },
     {
       // the ticket, freed of the flap's pressure, rises a little in the pocket
