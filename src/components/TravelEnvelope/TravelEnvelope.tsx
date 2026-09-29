@@ -11,6 +11,8 @@ import './TravelEnvelope.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent } from 'react'
 import { AddressBlock, AirmailCancel, GreeceCancel, StampPaper, TempleCancel, VillageStampInk, WaveStampInk } from './art/PostalArt'
+import { FlapRim, FlapShadow } from './art/FlapEdge'
+import { InkFilterDefs } from './art/InkFilters'
 import { Ticket } from './art/Ticket'
 import { Twine } from './art/Twine'
 import { WaxSeal } from './art/WaxSeal'
@@ -297,12 +299,23 @@ export function TravelEnvelope() {
               </g>
             </svg>
             <svg className="te-layer te-ink" viewBox={VIEWBOX} preserveAspectRatio="none" style={{ clipPath: BODY_PRINT_CLIP }}>
-              <AddressBlock />
-              <VillageStampInk />
-              <WaveStampInk />
-              <GreeceCancel x={1705} y={476} />
+              <defs>
+                <InkFilterDefs />
+              </defs>
+              <g filter="url(#te-ink-type)">
+                <AddressBlock />
+              </g>
+              <g filter="url(#te-ink-intaglio)">
+                <VillageStampInk />
+                <WaveStampInk />
+              </g>
+              <g filter="url(#te-ink-greece)">
+                <GreeceCancel x={1705} y={476} />
+              </g>
               {/* the airmail cancel was struck across the flap edge */}
-              <AirmailCancel id="te-air-body" x={1894} y={176} />
+              <g filter="url(#te-ink-air)">
+                <AirmailCancel id="te-air-body" x={1894} y={176} />
+              </g>
             </svg>
             <div className="te-layer te-light" />
             {/* faint waxy footprint left on the paper where the seal let go */}
@@ -327,15 +340,7 @@ export function TravelEnvelope() {
           </svg>
 
           {/* ---- top flap (hinged on the top edge) ---- */}
-          <svg ref={register('flap.shadow')} className="te-layer te-flap-shadow" viewBox={VIEWBOX} preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <filter id="te-flap-shadow-blur" x="-5%" y="-5%" width="110%" height="110%">
-                <feGaussianBlur stdDeviation="7" />
-              </filter>
-            </defs>
-            <polyline ref={register('flap.shadow.soft')} points={flapPoints} fill="none" stroke="#3b200c" strokeWidth={16} filter="url(#te-flap-shadow-blur)" transform="translate(3 9)" />
-            <polyline ref={register('flap.shadow.edge')} points={flapPoints} fill="none" stroke="#4a2a12" strokeWidth={4} opacity={0.5} transform="translate(0 2.5)" />
-          </svg>
+          <FlapShadow register={register} viewBox={VIEWBOX} />
           <div ref={register('flap')} className="te-flap" aria-hidden="true">
             <div className="te-flap__face te-flap__face--outer">
               <svg className="te-layer te-ink" viewBox={VIEWBOX} preserveAspectRatio="none">
@@ -345,9 +350,21 @@ export function TravelEnvelope() {
                   </clipPath>
                 </defs>
                 <g clipPath="url(#te-clip-flap)">
-                  <TempleCancel id="te-temple" x={1531} y={190} />
-                  <AirmailCancel id="te-air-flap" x={1894} y={176} />
+                  <g filter="url(#te-ink-temple)">
+                    <TempleCancel id="te-temple" x={1531} y={190} />
+                  </g>
+                  <g filter="url(#te-ink-air)">
+                    <AirmailCancel id="te-air-flap" x={1894} y={176} />
+                  </g>
                 </g>
+              </svg>
+              <svg className="te-layer" viewBox={VIEWBOX} preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <filter id="te-flap-rim-blur" x="-5%" y="-10%" width="110%" height="120%">
+                    <feGaussianBlur stdDeviation="2.4" />
+                  </filter>
+                </defs>
+                <FlapRim />
               </svg>
               <div className="te-layer te-light te-light--flap" />
               <div ref={register('flap.outer.shade')} className="te-layer te-flap__shade te-flap__shade--outer" />

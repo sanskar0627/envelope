@@ -216,64 +216,232 @@ def crease(h, w, p0, p1, rng, depth=0.05, soft=1.4):
     return (-valley * depth + ridge * depth * 0.55) * along * fade
 
 
+# --------------------------------------------------------------------------- photographic paper (Step 9)
+
+def ridged(h, w, lo, hi, rng):
+    """Ridged band noise: sharp crests, soft valleys (crumpled-paper facets)."""
+    n = band_noise(h, w, lo, hi, rng)
+    return 1 - np.abs(n) * 2
+
+
+def paper_relief(h, w, rng, creases=(), cockle=1.0, crinkle=1.0):
+    """Height field of a sheet that has been handled: broad cockling from
+    humidity, a fine crinkle all over, and a few soft creases. Returns height."""
+    hgt = fft_noise(h, w, 2.6, rng) * 9.0 * cockle                       # broad waviness
+    hgt += band_noise(h, w, 1 / 260, 1 / 90, rng) * 1.1 * cockle          # cockle bumps
+    hgt += ridged(h, w, 1 / 60, 1 / 16, rng) * 0.22 * crinkle             # crinkle facets
+    hgt += band_noise(h, w, 1 / 10, 1 / 3, rng) * 0.05 * crinkle              # micro facets
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    for (x0, y0), (x1, y1), depth, width in creases:
+        dx, dy = x1 - x0, y1 - y0
+        L = math.hypot(dx, dy)
+        nx, ny = -dy / L, dx / L
+        t = ((xx - x0) * dx + (yy - y0) * dy) / (L * L)
+        dist = (xx - x0) * nx + (yy - y0) * ny + band_noise(h, w, 1 / 260, 1 / 60, rng) * 2.0
+        along = smoothstep(-0.03, 0.08, t) * (1 - smoothstep(0.9, 1.03, t))
+        # a crease is a sharp valley with slightly raised shoulders
+        hgt += (-np.exp(-np.abs(dist) / width) * depth + np.exp(-(dist ** 2) / (2 * (width * 4) ** 2)) * depth * 0.25) * along
+    return hgt.astype(np.float32)
+
+
+def relief_light(hgt, strength=1.0, az=(-0.62, -0.78)):
+    """Lambert shading of a height field lit from the top-left, normalised so
+    flat paper = 1.0. Returns a multiplier (and a sheen term for crests)."""
+    gy, gx = np.gradient(hgt)
+    lx, ly = az
+    # light elevation ~40deg
+    lz = 0.9
+    nz = 1.0
+    ndl = (-gx * lx - gy * ly + nz * lz) / np.sqrt(gx * gx + gy * gy + 1) / math.sqrt(lx * lx + ly * ly + lz * lz)
+    flat = lz / math.sqrt(lx * lx + ly * ly + lz * lz)
+    shade = 1 + (ndl - flat) * 0.9 * strength
+    return shade.astype(np.float32)
+
+
+def paper_photo(h, w, rng, base=(0.918, 0.815, 0.708)):
+    """Aged rag stationery, built from how real paper is made rather than from
+    overall noise: uneven fibre formation (flocs), fine tooth, visible single
+    fibres, a few dark inclusions, and slow uneven yellowing. RGB float."""
+    # formation: pulp settles in clumps -> soft light/dark flocs (look-through cloudiness)
+    floc = band_noise(h, w, 1 / 30, 1 / 7, rng)
+    floc = np.sign(floc) * np.abs(floc) ** 0.8
+    formation = 0.7 * floc + 0.3 * band_noise(h, w, 1 / 90, 1 / 25, rng)
+    tooth = band_noise(h, w, 1 / 3.2, 1 / 1.4, rng)
+    fib = fibres(h, w, int(h * w / 420), rng, length=(5, 18))
+    fib_long = fibres(h, w, int(h * w / 5200), rng, length=(22, 70))
+    lum = 1 + 0.022 * formation + 0.016 * tooth + 0.05 * fib + 0.03 * fib_long
+
+    # yellowing: slow, uneven, stronger in some regions
+    age = 0.5 + 0.5 * fft_noise(h, w, 2.3, rng)
+    r = base[0] * lum + 0.012 * age
+    g = base[1] * lum - 0.010 * age
+    b = base[2] * lum - 0.050 * age
+    rgb = np.dstack([r, g, b])
+
+    # inclusions: tiny dark bits of bark / rag that every real sheet has
+    img = Image.new("L", (w, h), 0)
+    d = ImageDraw.Draw(img)
+    for _ in range(int(h * w / 26000)):
+        x, y = rng.uniform(0, w), rng.uniform(0, h)
+        if rng.random() < 0.6:
+            rr = rng.uniform(0.5, 1.3)
+            d.ellipse([x - rr, y - rr * rng.uniform(0.6, 1), x + rr, y + rr], fill=int(rng.uniform(90, 200)))
+        else:
+            a = rng.uniform(0, math.pi)
+            L = rng.uniform(3, 9)
+            d.line([(x, y), (x + math.cos(a) * L, y + math.sin(a) * L)], fill=int(rng.uniform(60, 150)), width=1)
+    inc = ndimage.gaussian_filter(np.asarray(img, np.float32) / 255, 0.45)
+    dark = np.array([0.36, 0.25, 0.17])
+    return rgb * (1 - inc[..., None] * 0.55) + dark * inc[..., None] * 0.55
+
+
+def foxing(h, w, rng, clusters, spread=18):
+    """Foxing: irregular rust spots with a dark core and a pale soft halo,
+    grouped in clusters (they grow from impurities). Returns core, halo 0..1."""
+    core = np.zeros((h, w), np.float32)
+    yy, xx = np.mgrid[0:h, 0:w]
+    wob = band_noise(h, w, 1 / 10, 1 / 2.5, rng)
+    for cx, cy, n in clusters:
+        for _ in range(n):
+            ox, oy = cx + rng.normal(0, spread), cy + rng.normal(0, spread * 0.8)
+            rad = rng.uniform(0.9, 4.2) * (2.2 if rng.random() < 0.12 else 1)
+            x0, x1 = int(max(ox - rad * 5, 0)), int(min(ox + rad * 5, w))
+            y0, y1 = int(max(oy - rad * 5, 0)), int(min(oy + rad * 5, h))
+            if x1 <= x0 or y1 <= y0:
+                continue
+            dd = np.hypot(xx[y0:y1, x0:x1] - ox, (yy[y0:y1, x0:x1] - oy) * rng.uniform(0.8, 1.25)) / rad
+            dd = dd + 0.55 * wob[y0:y1, x0:x1]
+            core[y0:y1, x0:x1] = np.maximum(core[y0:y1, x0:x1], (1 - smoothstep(0.4, 1.0, dd)) * rng.uniform(0.3, 1.0))
+    halo = np.clip(ndimage.gaussian_filter(core, 5) * 2.2, 0, 1)
+    return core, halo
+
+
+def water_stain(h, w, rng, cx, cy, R, squash=1.1):
+    """Dried water mark: faint tinted fill and a darker, sharp tide line."""
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    warp = fft_noise(h, w, 2.2, rng) * R * 0.55 + band_noise(h, w, 1 / 50, 1 / 12, rng) * R * 0.05
+    d = np.hypot(xx - cx, (yy - cy) * squash) + warp
+    fill = (1 - smoothstep(R * 0.6, R, d)) * 0.35
+    tide = np.exp(-np.clip(d - R, -1e9, None) ** 2 / (2 * (R * 0.012) ** 2)) * (d > R * 0.9)
+    inner = np.exp(-((d - R * 0.96) ** 2) / (2 * (R * 0.03) ** 2)) * 0.4
+    return np.clip(fill + tide * 0.9 + inner, 0, 1)
+
+
+def edge_wear_v2(rgb, sdf, rng, h, w, width=34, strength=0.26):
+    """Edge ageing as it really happens: soiling that creeps in unevenly from
+    the edges, a bruised/abraded rim where fibres are roughed up (lighter),
+    and handling dirt at the corners where the sheet is held."""
+    inside = np.clip(-sdf, 0, None)
+    var = np.clip(0.55 + 0.6 * (0.5 + 0.5 * fft_noise(h, w, 1.8, rng)), 0.3, 1.4)
+    creep = np.exp(-inside / (width * var)) * (0.75 + 0.25 * band_noise(h, w, 1 / 40, 1 / 8, rng))
+    brown = np.array([0.62, 0.43, 0.27])
+    k = np.clip(creep * strength, 0, 1)[..., None]
+    out = rgb * (1 - k) + brown * k
+    # abraded rim: roughed-up fibres scatter light (lighter, desaturated) just inside a dark cut edge
+    scuff = np.exp(-inside / 2.4) * smoothstep(0.1, 0.7, band_noise(h, w, 1 / 12, 1 / 3, rng) + 0.3)
+    out = out * (1 - scuff[..., None] * 0.18) + np.array([0.93, 0.87, 0.79]) * scuff[..., None] * 0.18
+    grime = np.exp(-inside / 1.2) * 0.32
+    return out * (1 - grime[..., None])
+
+
+def corner_handling(h, w, rng, corners, radius=160):
+    """Greyish handling dirt near corners where thumbs held the envelope."""
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    f = np.zeros((h, w), np.float32)
+    n = band_noise(h, w, 1 / 60, 1 / 14, rng)
+    for cx, cy, k in corners:
+        d = np.hypot(xx - cx, yy - cy) / radius + n * 0.35
+        f += (1 - smoothstep(0.2, 1.0, d)) * k
+    return np.clip(f, 0, 1)
+
+
 # --------------------------------------------------------------------------- envelope parts
 
 def envelope_body():
+    """Back of the envelope (Step 9: photographic pass)."""
     rng = np.random.default_rng(1936)
     h, w = ENV_H, ENV_W
-    rgb = paper_base(h, w, rng)
+    rgb = paper_photo(h, w, rng)
 
-    # corners rounded and slightly worn
+    # outline: slightly out of square, corners softened and bruised
     m = 5
     poly = [(m, m + 3), (w - m, m), (w - m - 2, h - m), (m + 2, h - m - 1)]
-    sdf = polygon_sdf(h, w, poly)
-    # rounded corners: soften SDF by blurring near corners
-    sdf = ndimage.gaussian_filter(sdf, 3.0)
+    sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 3.0)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    for cx, cy in ((0, 0), (w, 0), (w, h), (0, h)):  # rounded, crushed corners
+        dc = np.hypot(xx - cx, yy - cy)
+        sdf = sdf + np.clip(14 - dc, 0, None) * 0.55
 
-    dots, halo, rings = stain_layer(
-        h, w, rng, spots=48, rings=2,
-        zones=[(0.06, 0.05, 0.40, 0.35), (0.05, 0.55, 0.40, 0.95), (0.85, 0.75, 1.0, 1.0), (0.9, 0.0, 1.0, 0.2)],
-    )
-    rgb = apply_stains(rgb, dots, halo, rings)
-    rgb = tea_blotches(rgb, h, w, 31, amount=0.26, coverage=0.42)
-    rgb = edge_ageing(rgb, sdf, rng, h, w, width=42, strength=0.3)
-
-    # hidden side-flap folds: extremely faint (flap covers most of them)
+    # relief: the ticket inside pillows the middle; hidden side-flap seams; handling creases
     tip = (0.5 * w, 0.64 * h)
-    shade = crease(h, w, (0, h), tip, rng, depth=0.018) + crease(h, w, (w, h), tip, rng, depth=0.018)
-    # a couple of handling creases
-    shade += crease(h, w, (0.02 * w, 0.78 * h), (0.3 * w, 0.93 * h), rng, depth=0.028)
-    shade += crease(h, w, (0.93 * w, 0.02 * h), (0.995 * w, 0.24 * h), rng, depth=0.03)
-    rgb = rgb * (1 + shade[..., None])
+    hgt = paper_relief(h, w, rng, creases=[
+                ((0.02 * w, 0.78 * h), (0.3 * w, 0.95 * h), 1.3, 3),                 # old handling crease
+        ((0.93 * w, 0.02 * h), (0.995 * w, 0.24 * h), 1.5, 3),               # corner fold
+        ((0.62 * w, 0.99 * h), (0.74 * w, 0.72 * h), 0.8, 2.5),
+    ], cockle=1.0, crinkle=1.0)
+    inside = np.clip(-sdf, 0, None)
+    pillow = (1 - np.exp(-inside / 90)) * 22                                    # contents lift the middle
+    hgt = hgt + pillow
+    shade = relief_light(hgt, strength=0.8)
 
-    alpha = worn_alpha(sdf, rng, h, w)
+    # stains
+    clusters = [
+        (0.30 * w, 0.46 * h, 7), (0.34 * w, 0.66 * h, 6), (0.22 * w, 0.74 * h, 4), (0.09 * w, 0.42 * h, 5),
+        (0.97 * w, 0.93 * h, 12), (0.985 * w, 0.06 * h, 8), (0.29 * w, 0.92 * h, 5), (0.56 * w, 0.83 * h, 3),
+        (0.62 * w, 0.62 * h, 3), (0.12 * w, 0.95 * h, 4), (0.45 * w, 0.72 * h, 2), (0.88 * w, 0.52 * h, 3),
+    ]
+    core, halo = foxing(h, w, rng, [(x, y, n * 2) for x, y, n in clusters])
+    water = water_stain(h, w, rng, 0.2 * w, 0.62 * h, 0.13 * w) * 0.5 + water_stain(h, w, rng, 0.8 * w, 0.9 * h, 0.09 * w) * 0.4
+    tea = np.array([0.80, 0.58, 0.37])
+    rust = np.array([0.70, 0.40, 0.21])
+    rgb = tea_blotches(rgb, h, w, 31, amount=0.3, coverage=0.46)
+    rgb = rgb * (1 - water[..., None] * 0.2) + tea * water[..., None] * 0.2
+    rgb = rgb * (1 - halo[..., None] * 0.22) + tea * halo[..., None] * 0.22
+    rgb = rgb * (1 - core[..., None] * 0.7) + rust * core[..., None] * 0.7
+    grime = corner_handling(h, w, rng, [(0, h, 0.35), (w, h, 0.25), (0, 0.5 * h, 0.12)], radius=210)
+    rgb = rgb * (1 - grime[..., None] * 0.12) + np.array([0.52, 0.45, 0.38]) * grime[..., None] * 0.12
+    rgb = edge_wear_v2(rgb, sdf, rng, h, w, width=40, strength=0.55)
+    rgb = rgb * shade[..., None]
+
+    # paper thickness: the lit top/left cut edges catch the key light
+    rim = np.exp(-inside / 1.6) * (1 - smoothstep(0, 1, (xx / w + yy / h) * 0.9))
+    rgb = rgb + rim[..., None] * 0.08
+
+    alpha = worn_alpha(sdf, rng, h, w, rough=3.0, feather=0.8)
     return to_rgba_img(rgb, alpha)
 
 
 def envelope_flap_outer():
+    """Outside of the top flap: a separate sheet lying over the body."""
     rng = np.random.default_rng(2024)
     h, w = ENV_H, ENV_W
-    rgb = paper_base(h, w, rng, base=(0.928, 0.852, 0.752))
+    rgb = paper_photo(h, w, rng, base=(0.928, 0.826, 0.718))
 
     tx, ty = FLAP_TIP[0] * w, FLAP_TIP[1] * h
     poly = [(2, 3), (w - 3, 1), (tx + 14, ty - 8), (tx, ty), (tx - 14, ty - 8)]
-    sdf = polygon_sdf(h, w, poly)
-    sdf = ndimage.gaussian_filter(sdf, 2.2)
+    sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 2.2)
+    inside = np.clip(-sdf, 0, None)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
 
-    dots, halo, rings = stain_layer(
-        h, w, rng, spots=26, rings=1,
-        zones=[(0.18, 0.08, 0.36, 0.3), (0.05, 0.0, 0.2, 0.15), (0.85, 0.0, 0.98, 0.1)],
-    )
-    rgb = apply_stains(rgb, dots * 0.9, halo, rings * 0.7)
-    rgb = tea_blotches(rgb, h, w, 57, amount=0.22, coverage=0.4)
-    rgb = edge_ageing(rgb, sdf, rng, h, w, width=26, strength=0.24)
+    # relief: fold over the top edge, and the free edges curl up a little off the body
+    hgt = paper_relief(h, w, rng, creases=[((0.2 * w, 0.02 * h), (0.36 * w, 0.3 * h), 1.4, 2.2)], cockle=0.9, crinkle=1.0)
+    hinge_roll = np.exp(-yy / 14) * 10
+    curl = np.exp(-inside / 26) * 5.0 * (0.7 + 0.3 * band_noise(h, w, 1 / 300, 1 / 80, rng))
+    shade = relief_light(hgt + hinge_roll + curl, strength=0.8)
 
-    # soft fold highlight near hinge (paper bends over the top edge)
-    yy = np.mgrid[0:h, 0:w][0].astype(np.float32)
-    hinge = np.exp(-yy / 10) * 0.06
-    rgb = rgb * (1 + hinge[..., None])
+    clusters = [(0.24 * w, 0.2 * h, 9), (0.27 * w, 0.28 * h, 5), (0.12 * w, 0.07 * h, 4), (0.93 * w, 0.03 * h, 6), (0.4 * w, 0.12 * h, 2)]
+    core, halo = foxing(h, w, rng, [(x, y, n * 2) for x, y, n in clusters], spread=22)
+    tea = np.array([0.80, 0.58, 0.37])
+    rust = np.array([0.70, 0.40, 0.21])
+    rgb = tea_blotches(rgb, h, w, 57, amount=0.26, coverage=0.44)
+    wtr = water_stain(h, w, rng, 0.33 * w, 0.1 * h, 0.09 * w) * 0.45
+    rgb = rgb * (1 - wtr[..., None] * 0.2) + tea * wtr[..., None] * 0.2
+    rgb = rgb * (1 - halo[..., None] * 0.22) + tea * halo[..., None] * 0.22
+    rgb = rgb * (1 - core[..., None] * 0.72) + rust * core[..., None] * 0.72
+    rgb = edge_wear_v2(rgb, sdf, rng, h, w, width=26, strength=0.4)
+    rgb = rgb * shade[..., None]
 
-    alpha = worn_alpha(sdf, rng, h, w, rough=2.0)
+    alpha = worn_alpha(sdf, rng, h, w, rough=2.2)
     return to_rgba_img(rgb, alpha)
 
 

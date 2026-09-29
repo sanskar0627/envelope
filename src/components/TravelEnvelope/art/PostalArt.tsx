@@ -3,8 +3,7 @@
  * envelope units (see constants.ts). Ink layers are composited with multiply
  * + an ink-wear mask in CSS, so everything here is drawn in flat ink colour.
  */
-import { VILLAGE_STAMP, WAVE_STAMP } from '../constants'
-import { perforationHoles, rng, wavePath } from './geometry'
+import { perforationHoles, wavePath } from './geometry'
 
 const INK = '#2b2723'
 const RED_INK = '#b8432f'
@@ -167,163 +166,27 @@ export function StampPaper({ x, y, w, h, id, hole = 9, step = 28, rotate = 0 }: 
         ))}
         {/* the perforated rim is a little outside the printed frame */}
       </mask>
+      <linearGradient id={`${id}-light`} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#fffaf0" stopOpacity={0.5} />
+        <stop offset="0.5" stopColor="#fffaf0" stopOpacity={0} />
+        <stop offset="1" stopColor="#7a5230" stopOpacity={0.16} />
+      </linearGradient>
+      <radialGradient id={`${id}-age`} cx="0.5" cy="0.5" r="0.72">
+        <stop offset="0.6" stopColor="#c49a68" stopOpacity={0} />
+        <stop offset="1" stopColor="#b98a58" stopOpacity={0.42} />
+      </radialGradient>
+      {/* the cut face of the stamp paper: its thickness shows along the lower-right teeth */}
+      <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill="#b89c78" mask={`url(#${id})`} transform="translate(1.4 2.2)" />
       <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill="currentColor" mask={`url(#${id})`} />
       <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill="url(#te-stamp-grain)" mask={`url(#${id})`} style={{ mixBlendMode: 'overlay' }} />
+      {/* toned toward the edges, lit from the top-left */}
+      <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill={`url(#${id}-age)`} mask={`url(#${id})`} style={{ mixBlendMode: 'multiply' }} />
+      <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill={`url(#${id}-light)`} mask={`url(#${id})`} />
     </g>
   )
 }
 
-/** Deterministic house layout cascading down the caldera cliff. */
-function villageHouses(ix: number, iy: number, iw: number, ih: number) {
-  const r = rng(31)
-  const houses: Array<{ x: number; y: number; w: number; h: number; dome: boolean }> = []
-  for (let t = 0.02; t < 0.96; t += 0.065) {
-    const rows = 4 + Math.floor(r() * 4)
-    for (let row = 0; row < rows; row++) {
-      const x = ix + iw * (0.34 + 0.6 * t) + (r() - 0.5) * 14
-      const edgeY = iy + ih * (0.36 - 0.31 * t)
-      const y = edgeY + 10 + row * (24 + r() * 8) + (r() - 0.5) * 6
-      // stay on the rock: left boundary of the cliff face
-      const xmin = ix + iw * (0.3 + 0.24 * Math.max(0, (y - iy - ih * 0.38) / (ih * 0.62)))
-      if (x < xmin + 8 || y > iy + ih * 0.74 || x > ix + iw - 18) continue
-      houses.push({ x, y, w: 20 + r() * 18, h: 16 + r() * 12, dome: false })
-    }
-  }
-  houses.sort((a, b) => a.y - b.y)
-  return houses
-}
-
-export function VillageStampInk() {
-  const { x, y, w, h } = VILLAGE_STAMP
-  const ix = x + 30
-  const iy = y + 30
-  const iw = w - 60
-  const ih = h - 96
-  const clipId = 'te-clip-village'
-  const houses = villageHouses(ix, iy, iw, ih)
-  const cliff = `M${ix + iw * 0.28} ${iy + ih * 0.38}
-    C${ix + iw * 0.42} ${iy + ih * 0.3} ${ix + iw * 0.55} ${iy + ih * 0.18} ${ix + iw * 0.72} ${iy + ih * 0.13}
-    C${ix + iw * 0.84} ${iy + ih * 0.09} ${ix + iw * 0.94} ${iy + ih * 0.03} ${ix + iw} ${iy + ih * 0.01}
-    L${ix + iw} ${iy + ih} L${ix + iw * 0.52} ${iy + ih}
-    C${ix + iw * 0.5} ${iy + ih * 0.78} ${ix + iw * 0.38} ${iy + ih * 0.58} ${ix + iw * 0.28} ${iy + ih * 0.38} Z`
-  return (
-    <g stroke={INK} fill="none" opacity={0.88} strokeLinecap="round" strokeLinejoin="round">
-      <defs>
-        <clipPath id={clipId}>
-          <rect x={ix} y={iy} width={iw} height={ih} />
-        </clipPath>
-        <pattern id="te-hatch-cliff" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-40)">
-          <path d="M0 3 H6" stroke={INK} strokeWidth={1.35} />
-        </pattern>
-        <pattern id="te-hatch-dome" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
-          <path d="M0 2 H4" stroke={INK} strokeWidth={1.3} />
-        </pattern>
-        <pattern id="te-hatch-sky" width="10" height="8" patternUnits="userSpaceOnUse">
-          <path d="M0 4 H10" stroke={INK} strokeWidth={0.8} opacity={0.55} />
-        </pattern>
-      </defs>
-
-      {/* frames */}
-      <rect x={x + 16} y={y + 16} width={w - 32} height={h - 32} strokeWidth={1.6} />
-      <rect x={ix} y={iy} width={iw} height={ih} strokeWidth={3} />
-
-      <g clipPath={`url(#${clipId})`}>
-        {/* engraved sky, fading toward the horizon */}
-        <rect x={ix} y={iy} width={iw} height={ih * 0.3} fill="url(#te-hatch-sky)" stroke="none" />
-        <path d={`M${ix + 26} ${iy + 60} q14 -12 30 -4 q12 -10 26 0 q14 0 14 10 h-70 Z`} strokeWidth={1.4} fill="#fff" />
-        {/* distant island on the horizon */}
-        <path d={`M${ix} ${iy + ih * 0.46} q40 -18 90 -10 q30 -12 60 4 L${ix + iw * 0.4} ${iy + ih * 0.47}`} strokeWidth={1.6} fill="url(#te-hatch-cliff)" />
-        {/* caldera cliff */}
-        <path d={cliff} fill="url(#te-hatch-cliff)" strokeWidth={2} />
-        {/* scrub along the ridge */}
-        {[0.6, 0.67, 0.73, 0.8, 0.88, 0.94].map((t, i) => (
-          <path
-            key={i}
-            d={`M${ix + iw * t} ${iy + ih * (0.36 - 0.31 * ((t - 0.34) / 0.6)) - 2} q-${6 + (i % 2) * 3} -16 0 -${24 + (i % 3) * 6} q${6 + (i % 2) * 3} 14 0 ${24 + (i % 3) * 6} Z`}
-            strokeWidth={1.4}
-            fill="url(#te-hatch-dome)"
-          />
-        ))}
-        {/* whitewashed houses (white fill knocks the rock hatching out) */}
-        <g fill="#fff" strokeWidth={1.5}>
-          {houses.map((hs, i) => (
-            <g key={i}>
-              <rect x={hs.x} y={hs.y} width={hs.w} height={hs.h} rx={2.5} />
-              <path d={`M${hs.x + hs.w * 0.28} ${hs.y + hs.h} v-${hs.h * 0.42} a${hs.w * 0.1} ${hs.w * 0.1} 0 0 1 ${hs.w * 0.2} 0 v${hs.h * 0.42}`} strokeWidth={1.2} />
-              <path d={`M${hs.x + hs.w * 0.64} ${hs.y + hs.h * 0.3} h${hs.w * 0.16} v${hs.h * 0.22} h-${hs.w * 0.16} Z`} strokeWidth={1.1} />
-              <path d={`M${hs.x + hs.w} ${hs.y + 2} v${hs.h - 2}`} strokeWidth={2.4} opacity={0.5} />
-            </g>
-          ))}
-          {/* blue-domed churches */}
-          {[
-            [0.56, 0.36, 19],
-            [0.78, 0.3, 17],
-            [0.7, 0.52, 15],
-          ].map(([tx, ty, r], i) => {
-            const cx = ix + iw * tx
-            const cy = iy + ih * ty
-            return (
-              <g key={`d${i}`}>
-                <rect x={cx - r - 5} y={cy} width={(r + 5) * 2} height={r * 1.5} rx={2} />
-                <path d={`M${cx - r} ${cy} A${r} ${r * 0.95} 0 0 1 ${cx + r} ${cy} Z`} fill="url(#te-hatch-dome)" />
-                <path d={`M${cx} ${cy - r * 0.95} v-12 M${cx - 5} ${cy - r * 0.95 - 7} h10`} strokeWidth={1.8} />
-                <path d={`M${cx - 4} ${cy + r * 1.5} v-${r * 0.6} a4 4 0 0 1 8 0 v${r * 0.6}`} strokeWidth={1.2} />
-              </g>
-            )
-          })}
-          {/* bell tower */}
-          <g>
-            <rect x={ix + iw * 0.64} y={iy + ih * 0.24} width={20} height={34} />
-            <path d={`M${ix + iw * 0.64 + 5} ${iy + ih * 0.24 + 18} a5 6 0 0 1 10 0`} strokeWidth={1.2} />
-            <path d={`M${ix + iw * 0.64 + 10} ${iy + ih * 0.24} v-10`} strokeWidth={1.6} />
-          </g>
-        </g>
-        {/* sea: engraved swell, denser toward the viewer */}
-        {Array.from({ length: 16 }, (_, i) => {
-          const yy = iy + ih * 0.5 + i * (8 + i * 0.9)
-          const x1 = ix + iw * (0.32 + i * 0.022)
-          return <path key={i} d={wavePath(ix - 10, x1, yy, 1.6 + i * 0.18, 26 + i * 2.4, i * 1.3)} strokeWidth={1.3 + i * 0.05} />
-        })}
-        {/* sailing boat */}
-        <g strokeWidth={1.5} fill="#fff">
-          <path d={`M${ix + 38} ${iy + ih * 0.585} h34 l-5 7 h-24 Z`} />
-          <path d={`M${ix + 55} ${iy + ih * 0.58} v-34 l17 30 Z`} />
-          <path d={`M${ix + 53} ${iy + ih * 0.58} v-26 l-12 22 Z`} />
-        </g>
-      </g>
-
-      {/* value + country */}
-      <text x={ix + 4} y={y + h - 36} fontFamily={SERIF} fontWeight={700} fontSize={30} letterSpacing={7} fill={INK} stroke="none">
-        HELLAS
-      </text>
-      <text x={ix + iw - 2} y={y + h - 36} textAnchor="end" fontFamily={SERIF} fontWeight={700} fontSize={36} fill={INK} stroke="none">
-        5Δ
-      </text>
-    </g>
-  )
-}
-
-export function WaveStampInk() {
-  const { x, y, w, h } = WAVE_STAMP
-  const ix = x + 16
-  const iy = y + 16
-  const iw = w - 32
-  const ih = h - 32
-  return (
-    <g stroke={INK} fill="none" opacity={0.84} strokeLinecap="round" transform={`rotate(-3 ${x + w / 2} ${y + h / 2})`}>
-      <clipPath id="te-clip-wave">
-        <rect x={ix} y={iy} width={iw} height={ih} />
-      </clipPath>
-      <rect x={ix} y={iy} width={iw} height={ih} strokeWidth={3} />
-      <g clipPath="url(#te-clip-wave)">
-        {Array.from({ length: 7 }, (_, i) => (
-          <path key={i} d={wavePath(ix - 6, ix + iw + 6, iy + 20 + i * 15, 5, 36, i * 0.9)} strokeWidth={3.2} />
-        ))}
-        <circle cx={ix + iw * 0.72} cy={iy + 22} r={12} strokeWidth={2.6} fill="#f4ecdc" />
-      </g>
-    </g>
-  )
-}
+export { VillageStampInk, WaveStampInk } from './StampEngraving'
 
 /* ------------------------------------------------------------------ address block */
 

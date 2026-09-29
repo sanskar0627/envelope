@@ -45,13 +45,13 @@ const HAIRS = (() => {
     const n = cubic(taut)
     const seg = n.length === 8 ? [n] : [n.slice(0, 8), [n[6], n[7], ...n.slice(8, 14)], [n[12], n[13], ...n.slice(14, 20)]]
     for (const [x0, y0, x1, y1, x2, y2, x3, y3] of seg) {
-      for (let k = 0; k < 16; k++) {
+      for (let k = 0; k < 34; k++) {
         const t = r()
         const mt = 1 - t
         const x = mt * mt * mt * x0 + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3
         const y = mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3
         const side = r() < 0.5 ? -1 : 1
-        const len = 4 + r() * 9
+        const len = 3 + r() * 10 * (r() < 0.15 ? 1.8 : 1)
         const a = (r() - 0.5) * 1.4
         out.push(`M${x.toFixed(1)} ${y.toFixed(1)} q${(side * len * 0.6).toFixed(1)} ${(a * len * 0.4).toFixed(1)} ${(side * len).toFixed(1)} ${(a * len + (r() - 0.5) * 4).toFixed(1)}`)
       }
@@ -66,10 +66,11 @@ function Ply({ d, width, paint, role }: { d: [string, string]; width: number; pa
   const [taut, slack] = d
   return (
     <>
-      <path d={taut} data-slack={slack} data-role={role} stroke="#3f220e" strokeWidth={width + 2.4} />
+      <path d={taut} data-slack={slack} data-role={role} stroke="#2e1708" strokeWidth={width + 1.8} />
       <path d={taut} data-slack={slack} data-role={role} stroke={paint} strokeWidth={width} />
-      {/* rounded highlight on the side facing the key light */}
-      <path d={taut} data-slack={slack} data-role={role} stroke="#e2b27f" strokeWidth={width * 0.22} opacity={0.35} transform={`translate(${-width * 0.22} 0)`} />
+      {/* round cross-section: core shadow on the far side, highlight on the side facing the key light */}
+      <path d={taut} data-slack={slack} data-role={role} stroke="#2a1406" strokeWidth={width * 0.34} opacity={0.4} transform={`translate(${width * 0.3} 0)`} />
+      <path d={taut} data-slack={slack} data-role={role} stroke="#f0c592" strokeWidth={width * 0.18} opacity={0.32} transform={`translate(${-width * 0.24} 0)`} />
     </>
   )
 }
@@ -79,17 +80,25 @@ export function Twine({ register }: { register: Register }) {
   const shadowId = `te-twine-shadow-${uid}`
   const twistId = `te-twine-twist-${uid}`
   const clipId = `te-twine-clip-${uid}`
+  const contactId = `te-twine-contact-${uid}`
   const paint = `url(#${twistId})`
   return (
     <svg ref={register('twine.svg')} className="te-layer te-twine" viewBox="0 0 2200 1000" preserveAspectRatio="none" aria-hidden="true">
       <defs>
         {/* diagonal ply stripes: stroked along a near-vertical strand they read as twist */}
-        <pattern id={twistId} width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(38) scale(0.75)">
-          <rect width="12" height="12" fill="#8c5a33" />
-          <rect y="0" width="12" height="4.6" fill="#b98355" />
-          <rect y="4.6" width="12" height="1.2" fill="#d8a978" opacity="0.7" />
-          <rect y="10.6" width="12" height="1.4" fill="#4d2a12" opacity="0.8" />
+        {/* ply twist: each turn of fibre is a rounded band with a dark groove between turns;
+            stroked along a near-vertical strand the bands read as a lay of twisted fibre */}
+        <pattern id={twistId} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(36) scale(0.8)">
+          <rect width="9" height="9" fill="#7c4a26" />
+          <rect y="0.6" width="9" height="3.4" fill="#a06a3e" />
+          <rect y="1.3" width="9" height="1.2" fill="#c08a58" opacity="0.8" />
+          <rect y="4.6" width="9" height="1.6" fill="#8a5630" />
+          <rect y="7.4" width="9" height="1.4" fill="#3a1f0c" opacity="0.85" />
+          <path d="M0 2.2 L9 2.9 M0 5.4 L9 5" stroke="#d0a070" strokeWidth="0.35" opacity="0.55" />
         </pattern>
+        <filter id={contactId} x="-5%" y="-5%" width="110%" height="110%">
+          <feGaussianBlur stdDeviation="1.1" />
+        </filter>
         <filter id={shadowId} x="-5%" y="-5%" width="110%" height="110%">
           <feGaussianBlur stdDeviation="3.2" />
         </filter>
@@ -106,12 +115,18 @@ export function Twine({ register }: { register: Register }) {
             ))}
             <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={8.5} />
           </g>
+          <g ref={register('twine.contact')} filter={`url(#${contactId})`} stroke="#1e0e04" opacity="0.5" transform="translate(1.6 2.4)">
+            {STRANDS.map(([taut, slack], i) => (
+              <path key={i} d={taut} data-slack={slack} data-role="strand" strokeWidth={7} />
+            ))}
+            <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={6.5} />
+          </g>
           {STRANDS.map((d, i) => (
             <Ply key={i} d={d} width={7.5} paint={paint} role="strand" />
           ))}
           <Ply d={TAIL} width={7} paint={paint} role="tail" />
           {/* stray fibres catching the light */}
-          <path ref={register('twine.hairs')} d={HAIRS} stroke="#d2a577" strokeWidth={1.1} opacity={0.55} />
+          <path ref={register('twine.hairs')} d={HAIRS} stroke="#c9996a" strokeWidth={0.7} opacity={0.55} />
           <g ref={register('twine.fray')}>
             {TAIL_FRAY.map(([taut, slack], i) => (
               <path key={i} d={taut} data-slack={slack} stroke="#9c6a44" strokeWidth={2.6} opacity={0.85} />

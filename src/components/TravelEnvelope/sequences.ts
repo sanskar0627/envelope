@@ -168,6 +168,8 @@ export function buildSealBreak(n: NodeMap): Track[] {
       const sh = n.get('twine.shadow')
       attr(sh, 'transform', `translate(${lerp(5, 10, v)} ${lerp(7, 16, v)})`)
       attr(sh, 'opacity', String(lerp(0.42, 0.3, v)))
+      // lifted off the paper, the strands lose their tight contact shadow
+      attr(n.get('twine.contact'), 'opacity', String(lerp(0.5, 0, v)))
     },
   })
   /* … then the freed ends recoil: every strand zips back from the seal to the
@@ -218,8 +220,7 @@ export function buildSealBreak(n: NodeMap): Track[] {
     ease: ease('out'),
     update: (v) => {
       style(n.get('flap'), 'transform', BASE.flap(FLAP_RELEASE_ANGLE * v))
-      attr(n.get('flap.shadow.soft'), 'transform', `translate(${3 + 3 * v} ${9 + 16 * v})`)
-      style(n.get('flap.shadow'), 'opacity', String(0.34 + 0.12 * v))
+      attr(n.get('flap.shadow.soft'), 'transform', `translate(${3 * v} ${10 * v})`)
     },
   })
 
@@ -265,7 +266,7 @@ export function buildFlapOpen(n: NodeMap): Track[] {
         style(outerShade, 'backgroundColor', deg < 90 ? shade(outerLight(a), 0.5) : 'transparent')
         style(innerShade, 'backgroundColor', deg > 90 ? shade(Math.max(0, innerLight(a)), 0.75) : 'transparent')
         // the shadow line the closed flap cast on the body fades as it lifts away
-        style(bodyShadow, 'opacity', String(0.46 * Math.max(0, 1 - (deg - from) / 35)))
+        style(bodyShadow, 'opacity', String(Math.max(0, 1 - (deg - from) / 35)))
         // once over the top, the flap lies on the desk and casts a soft shadow there
         style(deskShadow, 'opacity', String(0.5 * Math.max(0, (deg - 120) / 60) ** 1.5))
         // light floods into the envelope as the mouth opens

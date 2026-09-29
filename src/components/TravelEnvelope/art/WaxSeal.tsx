@@ -15,8 +15,10 @@ import { useId } from 'react'
 import { ENV, FLAP_TIP, SEAL_VIEW, toSeal } from '../constants'
 import { blobPath, rng } from './geometry'
 
-const PUDDLE = blobPath(96, 7, 0.075, 44)
-const PUDDLE_INNER = blobPath(84, 11, 0.06, 36)
+const PUDDLE = blobPath(96, 7, 0.085, 40)
+const PUDDLE_INNER = blobPath(84, 11, 0.07, 48)
+/** thin film of wax that ran out onto the paper before it set */
+const SKIRT = blobPath(100, 19, 0.12, 20)
 const HALF = SEAL_VIEW / 2
 
 /** Top-down propeller plane — the seal's emblem. */
@@ -33,6 +35,24 @@ const EMBLEM = (() => {
   return [blade(0), blade(120), blade(240)].join(' ')
 })()
 const EMBLEM_SHAFT = 'M-2.2 8 L2.2 8 L1.6 40 L-1.6 40 Z'
+
+/** tiny bubbles and pits frozen in the surface (seal space, on the rim ring and outer puddle) */
+const PITS = (() => {
+  const r = rng(71)
+  const out: Array<[number, number, number]> = []
+  while (out.length < 12) {
+    const a = r() * Math.PI * 2
+    const d = 58 + r() * 34
+    out.push([Math.cos(a) * d, Math.sin(a) * d, 0.5 + r() * 0.8])
+  }
+  return out
+})()
+
+/** where the twine runs under the wax: the wax bulges over each strand at the rim (seal space) */
+const TWINE_RIDGES: Array<[number, number, number]> = [
+  [-3.5, -86, -4], [1.4, -86, -3], [14.6, -85, 1], [19.8, -85, 1],
+  [-18, 86, 8], [-12.6, 86, 7], [17.6, 86, 1], [23, 86, 1],
+]
 
 /* ------------------------------------------------------------------ fracture geometry */
 
@@ -130,8 +150,8 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
           <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="relief" />
           <feColorMatrix in="relief" type="luminanceToAlpha" result="reliefA" />
           <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="dome" />
-          <feTurbulence type="fractalNoise" baseFrequency="0.3" numOctaves="2" seed="4" result="grain" />
-          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.026 0" result="grainA" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="4" result="grain" />
+          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.02 0" result="grainA" />
           <feComposite in="reliefA" in2="dome" operator="arithmetic" k1="1.0" k2="0" k3="0" k4="0" result="h0" />
           <feComposite in="h0" in2="grainA" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="height" />
 
@@ -167,6 +187,10 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
           <g transform="translate(1.4 2.4)" clipPath={`url(#${clip})`}>
             <path d={PUDDLE} fill="#3a0f08" opacity="0.55" />
           </g>
+          {/* wax oil wicked into the paper around the seal: a faint darker halo */}
+          <g filter={`url(#${shadow})`} clipPath={`url(#${clip})`}>
+            <path d={SKIRT} transform="scale(1.06)" fill="none" stroke="#6a3a1c" strokeWidth={5} opacity={0.2} />
+          </g>
         </g>
       )}
 
@@ -186,8 +210,12 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
         <g className="te-seal__wax">
           <g clipPath={`url(#${clip})`}>
             <g filter={`url(#${wax})`}>
+              <path d={SKIRT} fill="#3c3c3c" />
               <path d={PUDDLE} fill="#8a8a8a" />
               <path d={PUDDLE_INNER} fill="#9a9a9a" />
+              {TWINE_RIDGES.map(([x, y, rot], i) => (
+                <ellipse key={`tr${i}`} cx={x} cy={y} rx={2.6} ry={9} transform={`rotate(${rot} ${x} ${y})`} fill="#8c8c8c" />
+              ))}
               <circle r={68} fill="none" stroke="#c4c4c4" strokeWidth={12} />
               <circle r={61} fill="#7d7d7d" />
               <circle r={52} fill="#777" />
@@ -195,6 +223,9 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
               <path d={EMBLEM_SHAFT} fill="#a8a8a8" transform="rotate(-8)" />
               <path d={EMBLEM} fill="#b4b4b4" transform="rotate(-8) scale(1.05)" />
               <circle r={7} fill="#c8c8c8" />
+              {PITS.map(([x, y, pr], i) => (
+                <circle key={`p${i}`} cx={x} cy={y} r={pr} fill="#6a6a6a" opacity={0.7} />
+              ))}
             </g>
             {/* broken edge of this piece: only visible once the halves part */}
             <g ref={r('fracture')} opacity={0} clipPath={`url(#${puddleClip})`}>
