@@ -9,6 +9,8 @@ const INK = '#2b2723'
 const RED_INK = '#b8432f'
 const SERIF = "'Libre Caslon Text', 'Times New Roman', serif"
 const MONO = "'Courier Prime', 'Courier New', monospace"
+const SLAB = "'Zilla Slab', 'Rockwell', serif"
+const GROTESK = "'Inter', 'Helvetica Neue', Arial, sans-serif"
 
 /* ------------------------------------------------------------------ shared */
 
@@ -123,26 +125,39 @@ export function AirmailCancel({ x, y, id }: { x: number; y: number; id: string }
       <g stroke="none">
         <RingText id={`${id}-ring`} r={121} size={26} color={RED_INK} text="PAR AVION ✦ AIR MAIL ✦ THIRA ✦ HELLAS ✦ " />
       </g>
-      <g strokeLinecap="round" strokeLinejoin="round" transform="rotate(-24)">
-        {/* airliner, side-on, climbing */}
-        <path
-          d="M-78 6 C-60 -2 20 -8 58 -6 C72 -5 84 0 84 6 C84 12 70 14 56 14 L-56 14 C-68 14 -78 12 -78 6 Z"
-          strokeWidth={3.4}
-        />
-        {/* fuselage shading: engraved lines along the belly */}
-        <path d="M-60 10 H52 M-54 12.5 H44" strokeWidth={1} />
-        <path d="M-70 4 L-86 -30 L-72 -30 L-50 2" strokeWidth={3.2} />
-        <path d="M-10 8 L-40 46 L-22 46 L22 10" strokeWidth={3.2} />
-        <path d="M-6 2 L-24 -26 L-12 -26 L14 2" strokeWidth={2.6} />
-        {[-42, -28, -14, 0, 14, 28, 42].map((wx) => (
-          <circle key={wx} cx={wx} cy={2} r={2.6} fill={RED_INK} stroke="none" />
-        ))}
-        {/* speed lines */}
-        <path d="M-96 26 H-58 M-104 36 H-70 M-92 -12 H-70" strokeWidth={2.4} />
+      {/* a globe behind the aircraft: latitude and meridian lines, broken by the plane */}
+      <g strokeWidth={1.2} opacity={0.7}>
+        <clipPath id={`${id}-globe`}>
+          <circle r={96} />
+        </clipPath>
+        <g clipPath={`url(#${id}-globe)`}>
+          {[-60, -30, 0, 30, 60].map((yy) => (
+            <path key={`lat${yy}`} d={`M-100 ${yy} Q0 ${yy + 14} 100 ${yy}`} strokeDasharray="14 5 22 6" />
+          ))}
+          {[-50, 0, 50].map((xx) => (
+            <path key={`lon${xx}`} d={`M${xx} -100 Q${xx * 0.6} 0 ${xx} 100`} strokeDasharray="18 6" />
+          ))}
+        </g>
       </g>
-      {/* clouds */}
-      <path d="M-70 64 q10 -14 24 -6 q8 -14 24 -4 q14 -4 16 10 H-70 Z" strokeWidth={2.4} />
-      <path d="M30 -64 q8 -10 18 -4 q8 -10 20 -2 q10 -2 10 8 H30 Z" strokeWidth={2.2} />
+      {/* airliner seen from above, climbing up to the right across the whole centre */}
+      <g strokeLinecap="round" strokeLinejoin="round" transform="rotate(-42) scale(1.12)">
+        <path d="M-80 0 C-80 -6 -70 -9 -58 -9 L58 -8 C74 -8 86 -4 90 0 C86 4 74 8 58 8 L-58 9 C-70 9 -80 6 -80 0 Z" fill="#fff" fillOpacity={0} strokeWidth={3.2} />
+        {/* wings and tailplane */}
+        <path d="M-6 -8 L-30 -62 L-16 -64 L22 -8 M-6 8 L-30 62 L-16 64 L22 8" strokeWidth={3} />
+        <path d="M-64 -8 L-78 -30 L-70 -31 L-52 -8 M-64 8 L-78 30 L-70 31 L-52 8" strokeWidth={2.6} />
+        {/* engines under the wings */}
+        <path d="M-18 -30 h14 M-12 -46 h12 M-18 30 h14 M-12 46 h12" strokeWidth={4} />
+        {/* engraved shading along the fuselage and panel lines */}
+        <path d="M-66 3.5 H70 M-62 6 H60" strokeWidth={1} />
+        <path d="M-40 -8 V8 M20 -8 V8 M48 -7 V7" strokeWidth={0.9} />
+        {[-44, -32, -20, -8, 4, 16, 28, 40, 52].map((wx) => (
+          <circle key={wx} cx={wx} cy={-3} r={1.7} fill={RED_INK} stroke="none" />
+        ))}
+        {/* cockpit */}
+        <path d="M74 -4 q8 4 0 8" strokeWidth={1.4} />
+      </g>
+      {/* speed lines trailing down-left */}
+      <path d="M-96 58 l30 -26 M-84 76 l26 -22 M-104 34 l20 -18" strokeWidth={2.2} />
     </g>
   )
 }
@@ -164,13 +179,13 @@ export function GreeceCancel({ x, y }: { x: number; y: number }) {
       <path d={wavePath(-138, 150, 52, 4, 40)} strokeWidth={2.6} />
       <path d={wavePath(-128, 150, 68, 4, 40, 1.4)} strokeWidth={2.6} />
       <text
-        x={18}
-        y={26}
-        textAnchor="middle"
-        fontFamily={SERIF}
+        x={-104}
+        y={28}
+        fontFamily={GROTESK}
         fontWeight={700}
-        fontSize={78}
-        letterSpacing={3}
+        fontSize={82}
+        textLength={250}
+        lengthAdjust="spacingAndGlyphs"
         fill={INK}
         stroke="none"
       >
@@ -211,8 +226,8 @@ export function StampPaper({ x, y, w, h, id, hole = 9, step = 28, rotate = 0 }: 
         <stop offset="1" stopColor="#7a5230" stopOpacity={0.16} />
       </linearGradient>
       <radialGradient id={`${id}-age`} cx="0.5" cy="0.5" r="0.72">
-        <stop offset="0.6" stopColor="#c49a68" stopOpacity={0} />
-        <stop offset="1" stopColor="#b98a58" stopOpacity={0.42} />
+        <stop offset="0.7" stopColor="#c49a68" stopOpacity={0} />
+        <stop offset="1" stopColor="#b98a58" stopOpacity={0.16} />
       </radialGradient>
       {/* the cut face of the stamp paper: its thickness shows along the lower-right teeth */}
       <rect x={x - hole * 0.6} y={y - hole * 0.6} width={w + hole * 1.2} height={h + hole * 1.2} fill="#b89c78" mask={`url(#${id})`} transform="translate(1.4 2.2)" />
@@ -239,18 +254,24 @@ export { VillageStampInk, WaveStampInk } from './StampEngraving'
 /* ------------------------------------------------------------------ address block */
 
 export function AddressBlock() {
+  // set like the reference: a worn slab-serif name, typewriter country and coordinates,
+  // all in the same faded charcoal ink as the postal marks
   return (
-    <g fill={INK}>
-      <text x={96} y={556} fontFamily={SERIF} fontWeight={700} fontSize={104} textLength={612} lengthAdjust="spacing">
+    <g fill={INK} stroke={INK} paintOrder="stroke" strokeLinejoin="round">
+      <text x={114} y={548} fontFamily={SLAB} fontWeight={600} fontSize={126} textLength={596} lengthAdjust="spacing" strokeWidth={0} opacity={0.88}>
         SANTORINI
       </text>
-      <text x={100} y={628} fontFamily={SERIF} fontWeight={400} fontSize={56} letterSpacing={9} textLength={290} lengthAdjust="spacing" opacity={0.92}>
+      <text x={120} y={622} fontFamily={MONO} fontWeight={400} fontSize={74} textLength={262} lengthAdjust="spacing" strokeWidth={0.3} opacity={0.84}>
         GREECE
       </text>
-      <path d="M102 692 H430" stroke={INK} strokeWidth={2.4} opacity={0.72} />
-      <g fontFamily={MONO} fontSize={50} opacity={0.9}>
-        <text x={100} y={784}>36.3932° N</text>
-        <text x={100} y={848}>25.4615° E</text>
+      <path d="M122 690 C200 689.4 330 690.6 428 689.6" fill="none" stroke={INK} strokeWidth={2} opacity={0.62} />
+      <g fontFamily={MONO} fontSize={52} strokeWidth={0.8} opacity={0.86}>
+        <text x={122} y={788} textLength={302} lengthAdjust="spacing">
+          36.3932° N
+        </text>
+        <text x={122} y={848} textLength={302} lengthAdjust="spacing">
+          25.4615° E
+        </text>
       </g>
     </g>
   )

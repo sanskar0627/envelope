@@ -23,7 +23,8 @@ os.makedirs(OUT, exist_ok=True)
 
 # Envelope geometry (must match constants.ts)
 ENV_W, ENV_H = 2200, 1000            # 2.2 : 1
-FLAP_TIP = (0.5, 0.56)               # flap tip in envelope-relative units
+FLAP_TIP = (0.5, 0.515)              # flap tip in envelope-relative units (constants.ts FLAP_TIP)
+FLAP_SIDE = (92, 88)                 # flap edges start this far down the left/right sides (constants.ts FLAP_SIDE)
 
 
 # --------------------------------------------------------------------------- noise helpers
@@ -311,7 +312,7 @@ def crumple(h, w, rng, scale=1.0):
     return hgt.astype(np.float32), vein.astype(np.float32)
 
 
-def folded_edge(h, w, sdf, rng, roll=7.0, rim=8.0, ticks=110):
+def folded_edge(h, w, sdf, rng, roll=4.0, rim=2.6, ticks=60):
     """An envelope's outline is mostly FOLDS, not cuts: the paper rolls over the
     edge, so there is a rounded ridge along the perimeter (catches the key light
     on the top/left, falls into shade on the bottom/right), an abraded pale rim
@@ -320,7 +321,7 @@ def folded_edge(h, w, sdf, rng, roll=7.0, rim=8.0, ticks=110):
     Returns (height_add, rim_mask, crush_mask)."""
     inside = np.clip(-sdf, 0, None)
     wander = band_noise(h, w, 1 / 160, 1 / 30, rng)
-    ridge = np.exp(-inside / roll) * (0.75 + 0.25 * wander) * 7.0
+    ridge = np.exp(-inside / roll) * (0.75 + 0.25 * wander) * 3.0
     rim_w = rim * (1 + 0.55 * wander) + 1.0
     rim_mask = (1 - smoothstep(rim_w - 1.5, rim_w + 1.0, inside)) * (inside > 0.3)
     # crush marks: short strokes across the edge, strongest right at the fold
@@ -352,7 +353,7 @@ def irregular_outline(sdf, rng, h, w, corner=18, wobble=2.6):
     for cx, cy in ((0, 0), (w, 0), (w, h), (0, h)):
         dc = np.hypot(xx - cx, yy - cy)
         out = out + np.clip(corner - dc, 0, None) * 0.7
-    nick = smoothstep(0.72, 0.95, band_noise(h, w, 1 / 26, 1 / 9, rng)) * 3.5
+    nick = smoothstep(0.8, 0.97, band_noise(h, w, 1 / 26, 1 / 9, rng)) * 2.0
     return out + nick * np.exp(-np.clip(-sdf, 0, None) / 4)
 
 
@@ -422,14 +423,14 @@ def envelope_body():
     """Back of the envelope (Step 10: matched to the photographed reference)."""
     rng = np.random.default_rng(1936)
     h, w = ENV_H, ENV_W
-    rgb = paper_photo(h, w, rng, base=(0.9, 0.862, 0.8))
+    rgb = paper_photo(h, w, rng, base=(0.905, 0.868, 0.808))
 
-    m = 5
-    poly = [(m, m + 3), (w - m, m), (w - m - 2, h - m), (m + 2, h - m - 1)]
+    # one sheet folded into an envelope is never quite square: slightly asymmetric corners,
+    # the top edge dipping a hair toward the right, the right side leaning in at the bottom
+    poly = [(7, 9), (w * 0.5, 5), (w - 5, 4), (w - 4, h * 0.5), (w - 8, h - 7), (w * 0.5, h - 5), (5, h - 8), (4, h * 0.5)]
     sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 3.0)
-    sdf = irregular_outline(sdf, rng, h, w, corner=26, wobble=5.0)
-    # mid-scale unevenness of the fold line itself (visible only up close)
-    sdf = sdf + band_noise(h, w, 1 / 70, 1 / 18, rng) * 1.2
+    sdf = irregular_outline(sdf, rng, h, w, corner=24, wobble=3.2)
+    sdf = sdf + band_noise(h, w, 1 / 70, 1 / 18, rng) * 0.6
     inside = np.clip(-sdf, 0, None)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     fold_h, rim_mask, crush = folded_edge(h, w, sdf, rng)
@@ -484,14 +485,14 @@ def envelope_body():
     # grime settles in the fold lines
     rgb = rgb * (1 - vein[..., None] * 0.045)
     # abraded fold rim: roughed-up fibres read paler, with grime caught in the crush marks
-    rgb = rgb * (1 - rim_mask[..., None] * 0.34) + np.array([0.95, 0.92, 0.85]) * rim_mask[..., None] * 0.34
-    rgb = rgb * (1 - crush[..., None] * 0.18)
+    rgb = rgb * (1 - rim_mask[..., None] * 0.16) + np.array([0.95, 0.92, 0.85]) * rim_mask[..., None] * 0.16
+    rgb = rgb * (1 - crush[..., None] * 0.1)
     rgb = rgb * shade[..., None]
 
     rim = np.exp(-inside / 1.6) * (1 - smoothstep(0, 1, (xx / w + yy / h) * 0.9))
     rgb = rgb + rim[..., None] * 0.08
 
-    alpha = worn_alpha(sdf, rng, h, w, rough=1.5, feather=0.75)
+    alpha = worn_alpha(sdf, rng, h, w, rough=0.9, feather=0.8)
     return to_rgba_img(rgb, alpha)
 
 
@@ -499,10 +500,10 @@ def envelope_flap_outer():
     """Outside of the top flap: a separate sheet lying over the body."""
     rng = np.random.default_rng(2024)
     h, w = ENV_H, ENV_W
-    rgb = paper_photo(h, w, rng, base=(0.915, 0.875, 0.81))
+    rgb = paper_photo(h, w, rng, base=(0.9, 0.85, 0.77))
 
     tx, ty = FLAP_TIP[0] * w, FLAP_TIP[1] * h
-    poly = [(2, 3), (w - 3, 1), (tx + 14, ty - 8), (tx, ty), (tx - 14, ty - 8)]
+    poly = [(2, 3), (w - 3, 1), (w - 2, FLAP_SIDE[1]), (tx + 14, ty - 7), (tx, ty), (tx - 14, ty - 7), (1, FLAP_SIDE[0])]
     sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 2.2)
     # the cut edge is never ruler-straight: slow waviness plus fine unevenness, a few compressed nicks
     sdf = sdf + band_noise(h, w, 1 / 380, 1 / 80, rng) * 3.2 + band_noise(h, w, 1 / 60, 1 / 16, rng) * 1.1
@@ -520,12 +521,13 @@ def envelope_flap_outer():
     curl = np.exp(-inside / 26) * 5.0 * (0.7 + 0.3 * band_noise(h, w, 1 / 300, 1 / 80, rng))
     shade = relief_light(hgt + ch * 0.45 + hinge_roll + curl, strength=0.85)
 
-    clusters = [(0.29 * w, 0.14 * h, 6), (0.34 * w, 0.29 * h, 5), (0.93 * w, 0.03 * h, 5), (0.12 * w, 0.06 * h, 2)]
-    core, halo = foxing(h, w, rng, clusters, spread=20, size=1.9)
+    clusters = [(0.29 * w, 0.14 * h, 6), (0.34 * w, 0.29 * h, 5), (0.93 * w, 0.03 * h, 5), (0.12 * w, 0.06 * h, 2), (0.3 * w, 0.2 * h, 3)]
+    core, halo = foxing(h, w, rng, clusters, spread=20, size=2.6)
     tea = np.array([0.78, 0.64, 0.47])
     rust = np.array([0.64, 0.4, 0.22])
-    rgb = tea_blotches(rgb, h, w, 57, amount=0.24, coverage=0.44, tint=(0.79, 0.64, 0.47))
+    rgb = tea_blotches(rgb, h, w, 57, amount=0.36, coverage=0.5, tint=(0.77, 0.62, 0.44))
     wtr = water_stain(h, w, rng, 0.33 * w, 0.12 * h, 0.1 * w) * 0.5
+    wtr = wtr + water_stain(h, w, rng, 0.16 * w, 0.2 * h, 0.07 * w) * 0.45 + water_stain(h, w, rng, 0.62 * w, 0.1 * h, 0.06 * w) * 0.35
     rgb = rgb * (1 - wtr[..., None] * 0.22) + tea * wtr[..., None] * 0.22
     rgb = rgb * (1 - halo[..., None] * 0.26) + tea * halo[..., None] * 0.26
     rgb = rgb * (1 - core[..., None] * 0.78) + rust * core[..., None] * 0.78
@@ -540,7 +542,7 @@ def envelope_flap_outer():
     rgb = rgb * (1 - grime_line[..., None])
     rgb = rgb * shade[..., None]
 
-    alpha = worn_alpha(sdf, rng, h, w, rough=1.3, feather=0.75)
+    alpha = worn_alpha(sdf, rng, h, w, rough=0.8, feather=0.8)
     return to_rgba_img(rgb, alpha)
 
 
@@ -552,7 +554,7 @@ def envelope_flap_inner():
     rgb = paper_base(h, w, rng, base=(0.765, 0.665, 0.540))
 
     tx, ty = FLAP_TIP[0] * w, FLAP_TIP[1] * h
-    poly = [(2, 3), (w - 3, 1), (tx + 14, ty - 8), (tx, ty), (tx - 14, ty - 8)]
+    poly = [(2, 3), (w - 3, 1), (w - 2, FLAP_SIDE[1]), (tx + 14, ty - 7), (tx, ty), (tx - 14, ty - 7), (1, FLAP_SIDE[0])]
     sdf = ndimage.gaussian_filter(polygon_sdf(h, w, poly), 2.2)
 
     dots, halo, rings = stain_layer(h, w, rng, spots=10, rings=0, zones=[(0.3, 0.05, 0.7, 0.4)])

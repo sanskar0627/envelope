@@ -125,11 +125,11 @@
 
 /* the envelope is a stack of paper: a darker rim peeks out along the lower-right edges */
 .te-edge {
-  /* the envelope's thickness (two sheets + the ticket): the shaded side faces show along
-     the lower and right edges, a little lighter where they catch bounce light from the desk */
+  /* the envelope's thickness: the shaded side faces show as a thin band along the
+     lower and right edges (never a border) */
   background: var(--paper-tex) 0 0 / 100% 100% no-repeat;
-  filter: brightness(0.62) sepia(0.3) saturate(1.05);
-  transform: translate3d(calc(var(--u) * 0.2), calc(var(--u) * 0.34), -0.5px);
+  filter: brightness(0.5) sepia(0.25) saturate(0.95);
+  transform: translate3d(calc(var(--u) * 0.1), calc(var(--u) * 0.2), -0.5px);
 }
 
 /* far wall of the envelope, seen through the open mouth */
@@ -305,9 +305,10 @@
 
 /* stamp paper glued to the envelope */
 .te-applied {
-  color: #eadcc1;
-  filter: drop-shadow(0 calc(var(--u) * 0.06) calc(var(--u) * 0.08) rgba(70, 38, 14, 0.45))
-    drop-shadow(calc(var(--u) * 0.12) calc(var(--u) * 0.22) calc(var(--u) * 0.3) rgba(70, 38, 14, 0.18));
+  /* stamp paper: the same aged stock as the envelope, glued flat. Only a hair of
+     thickness and contact shadow, falling down-right like every other shadow */
+  color: #e4d5ba;
+  filter: drop-shadow(calc(var(--u) * 0.03) calc(var(--u) * 0.05) calc(var(--u) * 0.05) rgba(70, 38, 14, 0.32));
 }
 
 /* printed / rubber-stamped ink: multiplies into the paper and wears unevenly */
@@ -340,7 +341,8 @@
   position: absolute;
   inset: 0;
   transform-origin: 50% 0;
-  transform-style: preserve-3d;
+  /* flat at rest (see poseFlap in sequences.ts); 3D only once it swings over */
+  transform-style: flat;
   transform: translateZ(1px);
   pointer-events: none;
 }
@@ -359,8 +361,8 @@
   /* the flap is a sheet bent over the top fold: brightest where it rolls over the hinge,
      falling slightly into shade as it curves down to meet the wax at its tip */
   background:
-    linear-gradient(180deg, rgba(255, 249, 236, 0.16) 0%, rgba(255, 249, 236, 0) 16%, rgba(255, 249, 236, 0) 55%, rgba(80, 46, 18, 0.2) 100%),
-    radial-gradient(ellipse 70% 90% at 22% 8%, rgba(255, 250, 238, 0.45), rgba(255, 250, 238, 0) 62%),
+    linear-gradient(180deg, rgba(255, 249, 236, 0.1) 0%, rgba(255, 249, 236, 0) 16%, rgba(255, 249, 236, 0) 55%, rgba(80, 46, 18, 0.2) 100%),
+    radial-gradient(ellipse 70% 90% at 22% 8%, rgba(255, 250, 238, 0.25), rgba(255, 250, 238, 0) 62%),
     linear-gradient(158deg, rgba(255, 246, 228, 0) 45%, rgba(92, 52, 22, 0.28) 100%);
   -webkit-mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;
   mask: var(--flap-tex) 0 0 / 100% 100% no-repeat;

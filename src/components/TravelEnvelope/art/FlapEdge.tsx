@@ -10,7 +10,7 @@
  *
  * Everything is authored in envelope units (ENV.w × ENV.h).
  */
-import { FLAP_TIP, ENV, SEAL } from '../constants'
+import { FLAP_SIDE, FLAP_TIP, ENV, SEAL } from '../constants'
 import { rng } from './geometry'
 
 type Pt = [number, number]
@@ -40,9 +40,9 @@ const unit = ([x, y]: Pt): Pt => {
 
 const EDGES: Edge[] = [
   // left edge: hinge corner (0,0) → tip; the body lies below-left of it
-  { from: [0, 0], to: [FLAP_TIP.x, FLAP_TIP.y], body: unit([-FLAP_TIP.y, FLAP_TIP.x]), lift: liftProfile(11), lit: true },
+  { from: [0, FLAP_SIDE.l], to: [FLAP_TIP.x, FLAP_TIP.y], body: unit([-(FLAP_TIP.y - FLAP_SIDE.l), FLAP_TIP.x]), lift: liftProfile(11), lit: true },
   // right edge: hinge corner (ENV.w,0) → tip; the body lies below-right
-  { from: [ENV.w, 0], to: [FLAP_TIP.x, FLAP_TIP.y], body: unit([FLAP_TIP.y, ENV.w - FLAP_TIP.x]), lift: liftProfile(23), lit: false },
+  { from: [ENV.w, FLAP_SIDE.r], to: [FLAP_TIP.x, FLAP_TIP.y], body: unit([FLAP_TIP.y - FLAP_SIDE.r, ENV.w - FLAP_TIP.x]), lift: liftProfile(23), lit: false },
 ]
 
 const N = 64

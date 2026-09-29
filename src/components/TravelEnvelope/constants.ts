@@ -14,17 +14,24 @@ export const ENV = {
 export const ASPECT = ENV.w / ENV.h
 
 /** Tip of the top flap, in envelope units. The flap hinges on the top edge. */
-export const FLAP_TIP = { x: 1100, y: 560 } as const
+export const FLAP_TIP = { x: 1100, y: 515 } as const
+/**
+ * The flap is folded over the full width, so its free edges start a little way
+ * down each side (as in the photographed reference), not at the corners.
+ */
+export const FLAP_SIDE = { l: 92, r: 88 } as const
 
-/** Flap outline (top-left corner → tip → top-right corner). */
+/** Flap outline (top-left corner → down the side → tip → up the right side → top-right corner). */
 export const FLAP_POLY: ReadonlyArray<readonly [number, number]> = [
   [0, 0],
+  [0, FLAP_SIDE.l],
   [FLAP_TIP.x, FLAP_TIP.y],
+  [ENV.w, FLAP_SIDE.r],
   [ENV.w, 0],
 ]
 
 /** Wax seal: centre and visible wax diameter in envelope units. */
-export const SEAL = { cx: 1094, cy: 520, d: 470 } as const
+export const SEAL = { cx: 1100, cy: 474, d: 440 } as const
 
 /** Postage stamps glued to the envelope back (top-left + size, envelope units). */
 export const VILLAGE_STAMP = { x: 1690, y: 332, w: 430, h: 592 } as const

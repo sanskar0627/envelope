@@ -47,8 +47,8 @@ export function InkFilterDefs() {
       <InkFilter id="te-ink-temple" seed={3} wobble={3.2} tooth={10} pressure={[2.6, -0.12]} />
       <InkFilter id="te-ink-air" seed={17} wobble={3.6} tooth={9} pressure={[2.4, -0.16]} pressureFreq={0.008} />
       <InkFilter id="te-ink-greece" seed={41} wobble={3.8} tooth={9} pressure={[2.6, -0.28]} pressureFreq={0.009} skip={5.05} />
-      <InkFilter id="te-ink-intaglio" seed={5} wobble={1.1} tooth={12} pressure={[1.0, 0.62]} bleed={0.28} skip={5.6} toothAt={0.74} />
-      <InkFilter id="te-ink-type" seed={61} wobble={0.6} tooth={6} toothAt={0.8} pressure={[0.9, 0.55]} bleed={0.32} skip={6.6} />
+      <InkFilter id="te-ink-intaglio" seed={5} wobble={1.2} tooth={11} pressure={[1.6, 0.14]} pressureFreq={0.01} bleed={0.34} skip={5.5} toothAt={0.74} />
+      <InkFilter id="te-ink-type" seed={61} wobble={0.8} tooth={6} toothAt={0.86} pressure={[1.9, 0.12]} pressureFreq={0.012} bleed={0.36} skip={5.8} />
     </>
   )
 }

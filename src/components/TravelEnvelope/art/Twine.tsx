@@ -1,65 +1,92 @@
 /**
- * Natural-fibre twine wrapped around the envelope, drawn in envelope units.
- * Each strand is two plied threads (a diagonal ply pattern stroked along the
- * strand reads as twist) with a highlight on the lit side and a soft offset
- * shadow for contact with the paper.
+ * Twisted twine wrapped round the envelope (envelope units).
  *
- * Every twine path carries its taut shape (`d`) and its slack shape
- * (`data-slack`, same command structure) so the release can morph between
- * them. The whole twine is clipped to just beyond the envelope edges: sliding
- * When the seal breaks, the twine's ends (held in the wax) are freed and the
- * tied tension recoils: each strand zips back from the seal to the envelope
- * edges and around to the underside. `data-role` tells the choreography how
- * each path retracts.
+ * Built as the physical cord is: two plies twisted round each other, so along
+ * the cord you see a run of diagonal bundles. Each bundle is a small rounded
+ * band crossing the cord at the lay angle; it is lit along its crown on the
+ * side facing the key light (top-left) and falls into shadow where it dives
+ * under the next bundle (the groove). The cord as a whole is a cylinder: its
+ * far (right) side is in shade, and it casts a tight contact shadow plus a
+ * softer cast shadow down-right on the paper.
+ *
+ * Animation: the release morphs each strand path from taut to slack
+ * (`data-slack`) and then retracts it with a dash pattern (`data-role`). The
+ * explicit ply bundles are generated for the resting pose only; they fade out
+ * as the cord goes slack and the patterned cord underneath carries the motion.
  */
 import { useId } from 'react'
 import { rng } from './geometry'
+import { CORDS, CORD_W, TAIL, TAIL_W, samplePath, type Pt } from './twineGeometry'
 
 type Register = (name: string) => (el: Element | null) => void
+const f = (n: number) => Math.round(n * 10) / 10
 
-/** [taut, slack] — slack bows outward and droops as tension goes */
-const STRANDS: Array<[string, string]> = [
-  ['M1092 -14 C1078 300 1054 640 1000 1014', 'M1080 -4 C1034 300 1012 662 980 1022'],
-  ['M1104 -14 C1092 300 1070 640 1014 1014', 'M1098 -2 C1054 322 1040 684 1002 1024'],
-  ['M1130 -14 C1130 300 1134 640 1142 1014', 'M1138 -4 C1174 302 1188 662 1168 1022'],
-  ['M1142 -14 C1144 320 1148 660 1156 1014', 'M1150 -2 C1198 332 1210 684 1184 1024'],
+/** the ply bundles along one cord: [bundle outline, groove line, crown highlight] */
+function plies(d: string, width: number, pitch: number, seed: number, taper?: { from: number; to: number; min: number }) {
+  const r = rng(seed)
+  const pts = samplePath(d, pitch / 2)
+  const total = pts[pts.length - 1]?.s ?? 1
+  const bundles: string[] = []
+  const grooves: string[] = []
+  const crowns: string[] = []
+  const lay = 0.9 // how far along the cord a bundle travels as it crosses it (× pitch)
+  for (let i = 0; i + 2 < pts.length; i += 2) {
+    const a = pts[i]
+    const b = pts[Math.min(pts.length - 1, i + 2)]
+    let w = width * (1 + (r() - 0.5) * 0.12) // hand-twisted: never quite even
+    if (taper) {
+      const k = Math.min(1, Math.max(0, (a.s / total - taper.from) / (taper.to - taper.from)))
+      w *= 1 - (1 - taper.min) * k
+    }
+    const n: Pt = [-a.t[1], a.t[0]] // left normal (toward -x for a downward cord)
+    const hw = w / 2
+    const along = (p: Pt, t: Pt, k: number): Pt => [p[0] + t[0] * pitch * k, p[1] + t[1] * pitch * k]
+    // a bundle runs from the left edge at a to the right edge a lay further on
+    const l0 = [a.p[0] + n[0] * hw, a.p[1] + n[1] * hw] as Pt
+    const r0 = along([a.p[0] - n[0] * hw, a.p[1] - n[1] * hw], a.t, lay)
+    const r1 = along(r0, a.t, 0.62)
+    const l1 = along(l0, a.t, 0.62)
+    const bulge = (p: Pt, q: Pt, k: number): Pt => [(p[0] + q[0]) / 2 - a.t[0] * pitch * k, (p[1] + q[1]) / 2 - a.t[1] * pitch * k]
+    const c0 = bulge(l0, r0, 0.22)
+    const c1 = bulge(l1, r1, -0.22)
+    bundles.push(`M${f(l0[0])} ${f(l0[1])} Q${f(c0[0])} ${f(c0[1])} ${f(r0[0])} ${f(r0[1])} L${f(r1[0])} ${f(r1[1])} Q${f(c1[0])} ${f(c1[1])} ${f(l1[0])} ${f(l1[1])} Z`)
+    grooves.push(`M${f(l1[0])} ${f(l1[1])} Q${f(c1[0])} ${f(c1[1])} ${f(r1[0])} ${f(r1[1])}`)
+    // crown: the lit ridge of the bundle, only on the half that faces the light
+    const m0: Pt = [(l0[0] * 0.8 + r0[0] * 0.2), (l0[1] * 0.8 + r0[1] * 0.2)]
+    const m1: Pt = [(l0[0] * 0.35 + r0[0] * 0.65), (l0[1] * 0.35 + r0[1] * 0.65)]
+    const mc = bulge(m0, m1, -0.1)
+    crowns.push(`M${f(m0[0] + a.t[0] * 2)} ${f(m0[1] + a.t[1] * 2)} Q${f(mc[0] + a.t[0] * 2.4)} ${f(mc[1] + a.t[1] * 2.4)} ${f(m1[0] + a.t[0] * 2.6)} ${f(m1[1] + a.t[1] * 2.6)}`)
+    void b
+  }
+  return { bundles: bundles.join(' '), grooves: grooves.join(' '), crowns: crowns.join(' ') }
+}
+
+const CORD_PLIES = CORDS.map(([taut], i) => plies(taut, CORD_W, 7.2, 40 + i))
+const TAIL_PLIES = plies(TAIL[0], TAIL_W, 4.4, 77, { from: 0.55, to: 1, min: 0.55 })
+
+/** frayed end: the plies come apart into a few loose fibres */
+const FRAY: Array<[string, string]> = [
+  ['M836 938 c-4 6 -10 10 -18 12 c-5 1 -9 4 -12 8', 'M848 962 c-4 6 -10 9 -18 11 c-5 1 -9 4 -12 7'],
+  ['M836 938 c-1 8 -4 14 -9 20 c-3 4 -4 8 -4 12', 'M848 962 c-1 7 -4 13 -9 19 c-3 4 -4 8 -4 11'],
+  ['M836 938 c-7 3 -13 3 -20 1 c-5 -1 -9 0 -12 3', 'M848 962 c-7 2 -13 2 -20 0 c-5 -1 -9 0 -12 3'],
+  ['M836 938 c2 7 1 13 -2 19', 'M848 962 c2 7 1 12 -2 18'],
+  ['M835 939 c-6 7 -13 11 -21 13 c-3 1 -6 3 -8 6', 'M847 963 c-6 6 -13 10 -21 12 c-3 1 -6 3 -8 6'],
 ]
 
-// loose tail escaping from under the seal
-const TAIL: [string, string] = [
-  'M1034 668 C1006 720 978 742 930 790 C886 834 860 880 842 918 C834 936 822 952 806 962',
-  'M1030 676 C1000 738 968 772 922 822 C882 866 866 912 858 946 C852 964 842 980 828 992',
-]
-const TAIL_FRAY: Array<[string, string]> = [
-  ['M806 962 c-8 5 -16 7 -26 6', 'M828 992 c-9 3 -18 3 -27 -1'],
-  ['M806 962 c-6 8 -11 15 -20 20', 'M828 992 c-7 7 -13 13 -23 16'],
-  ['M806 962 c-2 9 -2 16 -8 24', 'M828 992 c-3 8 -4 15 -11 22'],
-  ['M807 961 c-9 2 -14 -2 -22 -1 c-4 0 -7 2 -9 4', 'M829 991 c-9 1 -15 -2 -23 -2 c-4 0 -7 2 -9 3'],
-  ['M806 963 c-4 6 -9 9 -13 16 c-2 3 -2 7 -5 9', 'M828 993 c-4 6 -9 8 -14 14 c-2 3 -3 6 -6 8'],
-]
-
-/** slightly fatter turns along each strand (dash pattern of the lump stroke) */
-const LUMPS = ['0 38 9 61 6 90 11 47', '0 52 7 44 10 83 8 71', '0 27 10 70 7 58 9 96', '0 64 8 39 6 77 12 55']
-
-/** Stray fibres standing off the ply — sampled along each taut strand (deterministic). */
+/** stray fibres standing off the cords (deterministic) */
 const HAIRS = (() => {
   const r = rng(808)
   const out: string[] = []
-  const cubic = (d: string) => d.match(/-?\d*\.?\d+/g)!.map(Number)
-  for (const [taut] of [...STRANDS, TAIL]) {
-    const n = cubic(taut)
-    const seg = n.length === 8 ? [n] : [n.slice(0, 8), [n[6], n[7], ...n.slice(8, 14)], [n[12], n[13], ...n.slice(14, 20)]]
-    for (const [x0, y0, x1, y1, x2, y2, x3, y3] of seg) {
-      for (let k = 0; k < 34; k++) {
-        const t = r()
-        const mt = 1 - t
-        const x = mt * mt * mt * x0 + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3
-        const y = mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3
-        const side = r() < 0.5 ? -1 : 1
-        const len = 3 + r() * 10 * (r() < 0.15 ? 1.8 : 1)
-        const a = (r() - 0.5) * 1.4
-        out.push(`M${x.toFixed(1)} ${y.toFixed(1)} q${(side * len * 0.6).toFixed(1)} ${(a * len * 0.4).toFixed(1)} ${(side * len).toFixed(1)} ${(a * len + (r() - 0.5) * 4).toFixed(1)}`)
-      }
+  for (const [taut] of [...CORDS, TAIL]) {
+    for (const { p, t } of samplePath(taut, 14)) {
+      if (r() < 0.45) continue
+      const side = r() < 0.5 ? -1 : 1
+      const w = taut === TAIL[0] ? TAIL_W : CORD_W
+      const x = p[0] - t[1] * side * w * 0.45
+      const y = p[1] + t[0] * side * w * 0.45
+      const len = 3 + r() * 8 * (r() < 0.15 ? 1.8 : 1)
+      const ang = Math.atan2(t[1], t[0]) + side * (0.5 + r() * 0.8)
+      out.push(`M${f(x)} ${f(y)} q${f(Math.cos(ang) * len * 0.6)} ${f(Math.sin(ang) * len * 0.6 + (r() - 0.5) * 3)} ${f(Math.cos(ang) * len)} ${f(Math.sin(ang) * len)}`)
     }
   }
   return out.join(' ')
@@ -67,17 +94,15 @@ const HAIRS = (() => {
 
 type Role = 'strand' | 'tail'
 
-function Ply({ d, width, paint, role, lumps }: { d: [string, string]; width: number; paint: string; role: Role; lumps?: string }) {
+/** the continuous cord body (what moves): shaded cylinder painted with the twist pattern */
+function Cord({ d, width, paint, role }: { d: [string, string]; width: number; paint: string; role: Role }) {
   const [taut, slack] = d
   return (
     <>
-      <path d={taut} data-slack={slack} data-role={role} stroke="#2a1406" strokeWidth={width + 1.6} />
-      {/* a hand-twisted cord is never even: slightly fatter turns here and there */}
-      {lumps && <path d={taut} data-slack={slack} data-role={role} stroke="#2a1406" strokeWidth={width + 2.6} strokeDasharray={lumps} strokeLinecap="round" />}
+      <path d={taut} data-slack={slack} data-role={role} stroke="#2c1506" strokeWidth={width + 1.2} />
       <path d={taut} data-slack={slack} data-role={role} stroke={paint} strokeWidth={width} />
-      {/* round cross-section: core shadow on the far side, highlight on the side facing the key light */}
-      <path d={taut} data-slack={slack} data-role={role} stroke="#1e0d04" strokeWidth={width * 0.3} opacity={0.42} transform={`translate(${width * 0.33} 0)`} />
-      <path d={taut} data-slack={slack} data-role={role} stroke="#e0ac78" strokeWidth={width * 0.14} opacity={0.22} transform={`translate(${-width * 0.26} 0)`} />
+      {/* cylinder: the far side turns away from the key light */}
+      <path d={taut} data-slack={slack} data-role={role} stroke="#1c0c03" strokeWidth={width * 0.32} opacity={0.45} transform={`translate(${f(width * 0.34)} 0)`} />
     </>
   )
 }
@@ -85,50 +110,33 @@ function Ply({ d, width, paint, role, lumps }: { d: [string, string]; width: num
 export function Twine({ register }: { register: Register }) {
   const uid = useId().replace(/:/g, '')
   const shadowId = `te-twine-shadow-${uid}`
-  const twistId = `te-twine-twist-${uid}`
-  const clipId = `te-twine-clip-${uid}`
   const contactId = `te-twine-contact-${uid}`
-  const taperId = `te-twine-taper-${uid}`
+  const twistId = `te-twine-twist-${uid}`
+  const bundleId = `te-twine-bundle-${uid}`
+  const clipId = `te-twine-clip-${uid}`
   const paint = `url(#${twistId})`
   return (
     <svg ref={register('twine.svg')} className="te-layer te-twine" viewBox="0 0 2200 1000" preserveAspectRatio="none" aria-hidden="true">
       <defs>
-        {/* diagonal ply stripes: stroked along a near-vertical strand they read as twist */}
-        {/* ply twist: each turn of fibre is a rounded band with a dark groove between turns;
-            stroked along a near-vertical strand the bands read as a lay of twisted fibre */}
-        {/* two-ply twist: each turn is a rounded bundle of fibre (dark at its edges, lit along its
-            crown) and the two plies alternate in tone; the lay runs diagonally across the cord */}
-        <linearGradient id={`${twistId}-a`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#3a1d0a" />
-          <stop offset="0.35" stopColor="#9a6538" />
-          <stop offset="0.55" stopColor="#b9834f" />
-          <stop offset="1" stopColor="#4a260f" />
-        </linearGradient>
-        <linearGradient id={`${twistId}-b`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#331906" />
-          <stop offset="0.4" stopColor="#7e4d28" />
-          <stop offset="0.6" stopColor="#976036" />
-          <stop offset="1" stopColor="#3c1f0b" />
-        </linearGradient>
-        <pattern id={twistId} width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-34) scale(0.72)">
-          <rect width="10" height="5.2" fill={`url(#${twistId}-a)`} />
-          <rect y="5" width="10" height="5" fill={`url(#${twistId}-b)`} />
-          {/* individual fibres riding each bundle */}
-          <path d="M0 1.7 L10 2.3 M0 3.3 L10 3 M0 6.6 L10 7.1 M0 8.2 L10 7.9" stroke="#d6a676" strokeWidth="0.28" opacity="0.5" />
+        {/* fallback twist for the moving cord: alternating plies across a diagonal lay */}
+        <pattern id={twistId} width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-36) scale(0.72)">
+          <rect width="10" height="10" fill="#6d3f1d" />
+          <rect y="0.8" width="10" height="3.6" fill="#9a6435" />
+          <rect y="5.6" width="10" height="3" fill="#835228" />
+          <rect y="4.5" width="10" height="0.9" fill="#2e1606" />
+          <rect y="9.1" width="10" height="0.9" fill="#2e1606" />
         </pattern>
-        {/* the loose end tapers: the full-thickness cord fades out toward the tip, revealing a thinner core */}
-        <linearGradient id={taperId} gradientUnits="userSpaceOnUse" x1="950" y1="770" x2="815" y2="955">
-          <stop offset="0" stopColor="#fff" />
-          <stop offset="1" stopColor="#000" />
+        {/* a bundle of fibre: darker where it curves away, lit along its middle */}
+        <linearGradient id={bundleId} x1="0" y1="0" x2="1" y2="0.4">
+          <stop offset="0" stopColor="#7e4c24" />
+          <stop offset="0.45" stopColor="#9a6233" />
+          <stop offset="1" stopColor="#4e2a10" />
         </linearGradient>
-        <mask id={`${taperId}-m`} maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="1000">
-          <rect x="0" y="0" width="2200" height="1000" fill={`url(#${taperId})`} />
-        </mask>
         <filter id={contactId} x="-5%" y="-5%" width="110%" height="110%">
-          <feGaussianBlur stdDeviation="1.1" />
+          <feGaussianBlur stdDeviation="1.2" />
         </filter>
         <filter id={shadowId} x="-5%" y="-5%" width="110%" height="110%">
-          <feGaussianBlur stdDeviation="3.2" />
+          <feGaussianBlur stdDeviation="4" />
         </filter>
         {/* the twine wraps just over the top and bottom edges, then goes around the back */}
         <clipPath id={clipId}>
@@ -136,34 +144,49 @@ export function Twine({ register }: { register: Register }) {
         </clipPath>
       </defs>
       <g clipPath={`url(#${clipId})`} fill="none" strokeLinecap="round">
-        <g>
-          <g ref={register('twine.shadow')} filter={`url(#${shadowId})`} stroke="#2a1405" opacity="0.42" transform="translate(5 7)">
-            {STRANDS.map(([taut, slack], i) => (
-              <path key={i} d={taut} data-slack={slack} data-role="strand" strokeWidth={9} />
-            ))}
-            <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={8.5} />
-          </g>
-          <g ref={register('twine.contact')} filter={`url(#${contactId})`} stroke="#1e0e04" opacity="0.5" transform="translate(1.6 2.4)">
-            {STRANDS.map(([taut, slack], i) => (
-              <path key={i} d={taut} data-slack={slack} data-role="strand" strokeWidth={7} />
-            ))}
-            <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={6.5} />
-          </g>
-          {STRANDS.map((d, i) => (
-            <Ply key={i} d={d} width={7} paint={paint} role="strand" lumps={LUMPS[i]} />
+        {/* shadows on the paper: soft cast shadow down-right, then a tight contact line */}
+        <g ref={register('twine.shadow')} filter={`url(#${shadowId})`} stroke="#2a1405" opacity="0.4" transform="translate(6 8)">
+          {CORDS.map(([taut, slack], i) => (
+            <path key={i} d={taut} data-slack={slack} data-role="strand" strokeWidth={CORD_W + 2} />
           ))}
-          {/* loose tail: thin core the whole way, full cord fading out toward the tip */}
-          <Ply d={TAIL} width={3.6} paint={paint} role="tail" />
-          <g mask={`url(#${taperId}-m)`}>
-            <Ply d={TAIL} width={6} paint={paint} role="tail" />
-          </g>
-          {/* stray fibres catching the light */}
-          <path ref={register('twine.hairs')} d={HAIRS} stroke="#a4744a" strokeWidth={0.7} opacity={0.5} />
-          <g ref={register('twine.fray')}>
-            {TAIL_FRAY.map(([taut, slack], i) => (
-              <path key={i} d={taut} data-slack={slack} stroke={i % 2 ? '#7a4a26' : '#a8764a'} strokeWidth={i < 3 ? 1.5 : 0.9} opacity={0.85} />
-            ))}
-          </g>
+          <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={TAIL_W + 1} />
+        </g>
+        <g ref={register('twine.contact')} filter={`url(#${contactId})`} stroke="#1e0e04" opacity="0.55" transform="translate(1.8 2.6)">
+          {CORDS.map(([taut, slack], i) => (
+            <path key={i} d={taut} data-slack={slack} data-role="strand" strokeWidth={CORD_W - 1} />
+          ))}
+          <path d={TAIL[0]} data-slack={TAIL[1]} data-role="tail" strokeWidth={TAIL_W - 1} />
+        </g>
+
+        {CORDS.map((d, i) => (
+          <Cord key={i} d={d} width={CORD_W} paint={paint} role="strand" />
+        ))}
+        <Cord d={TAIL} width={TAIL_W * 0.8} paint={paint} role="tail" />
+
+        {/* the resting cords' real ply structure (fades out when the cords go slack) */}
+        <g ref={register('twine.helix')}>
+          {[...CORD_PLIES, TAIL_PLIES].map((p, i) => (
+            <g key={i}>
+              <path d={p.bundles} fill={`url(#${bundleId})`} stroke="#3a1c08" strokeWidth={0.5} strokeLinejoin="round" />
+              <path d={p.grooves} stroke="#1f0d03" strokeWidth={i < 2 ? 1.3 : 0.8} opacity={0.75} />
+              <path d={p.crowns} stroke="#d9a877" strokeWidth={i < 2 ? 0.9 : 0.6} opacity={0.55} />
+            </g>
+          ))}
+          {/* the cylinder's shade over the bundles, and a faint sheen on the lit side */}
+          {CORDS.map(([taut], i) => (
+            <g key={`s${i}`}>
+              <path d={taut} stroke="#1c0c03" strokeWidth={CORD_W * 0.3} opacity={0.32} transform={`translate(${f(CORD_W * 0.36)} 0)`} />
+              <path d={taut} stroke="#f0c69a" strokeWidth={CORD_W * 0.1} opacity={0.14} transform={`translate(${f(-CORD_W * 0.2)} 0)`} />
+            </g>
+          ))}
+        </g>
+
+        {/* stray fibres catching the light */}
+        <path ref={register('twine.hairs')} d={HAIRS} stroke="#a57446" strokeWidth={0.6} opacity={0.55} />
+        <g ref={register('twine.fray')} strokeLinecap="round">
+          {FRAY.map(([taut, slack], i) => (
+            <path key={i} d={taut} data-slack={slack} stroke={i % 2 ? '#6e401e' : '#a8764a'} strokeWidth={i < 2 ? 1.4 : 0.8} opacity={0.9} />
+          ))}
         </g>
       </g>
     </svg>

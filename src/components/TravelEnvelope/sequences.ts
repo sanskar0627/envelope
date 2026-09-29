@@ -74,8 +74,19 @@ export const BASE = {
     `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, ${z}px) rotate(${rot.toFixed(3)}deg) scale(${scale.toFixed(4)})`,
 } as const
 
-function style(el: Element | undefined, prop: 'transform' | 'opacity' | 'backgroundColor', value: string) {
+function style(el: Element | undefined, prop: 'transform' | 'opacity' | 'backgroundColor' | 'transformStyle', value: string) {
   if (el) (el as HTMLElement | SVGElement).style[prop] = value
+}
+
+/**
+ * Pose the flap. Its subtree stays FLAT (painted in DOM order: paper faces,
+ * then wax) until it is well on its way over; only then does it need a 3D
+ * context for the inside face. Sorting the wax against the flap paper in 3D
+ * at rest mis-orders on some GPUs (a pale band of flap paper across the seal).
+ */
+function poseFlap(el: Element | undefined, deg: number) {
+  style(el, 'transform', BASE.flap(deg))
+  style(el, 'transformStyle', deg > 60 ? 'preserve-3d' : 'flat')
 }
 function attr(el: Element | undefined, name: string, value: string) {
   el?.setAttribute(name, value)
@@ -165,6 +176,8 @@ export function buildSealBreak(n: NodeMap): Track[] {
       morphs.forEach((m) => m(v))
       // stray fibres are drawn on the taut strands; they settle out of view as the strands bow
       attr(n.get('twine.hairs'), 'opacity', String(0.55 * Math.max(0, 1 - v * 3)))
+      // the modelled ply bundles belong to the resting cord; the patterned cord carries the motion
+      attr(n.get('twine.helix'), 'opacity', String(Math.max(0, 1 - v * 4)))
       const sh = n.get('twine.shadow')
       attr(sh, 'transform', `translate(${lerp(5, 10, v)} ${lerp(7, 16, v)})`)
       attr(sh, 'opacity', String(lerp(0.42, 0.3, v)))
@@ -175,7 +188,7 @@ export function buildSealBreak(n: NodeMap): Track[] {
   /* … then the freed ends recoil: every strand zips back from the seal to the
      envelope edges (and round to the underside); the loose tail is drawn in
      under the seal. Implemented as a two-dash pattern closing toward the ends. */
-  const SEAL_AT = 0.52 // where the seal sits along a strand (fraction of length)
+  const SEAL_AT = 0.47 // where the seal sits along a strand (fraction of length)
   const paths = Array.from(twineSvg?.querySelectorAll<SVGPathElement>('path[data-role]') ?? [])
   let lengths: number[] | null = null
   tracks.push({
@@ -219,7 +232,7 @@ export function buildSealBreak(n: NodeMap): Track[] {
     dur: T.flapLift.dur,
     ease: ease('out'),
     update: (v) => {
-      style(n.get('flap'), 'transform', BASE.flap(FLAP_RELEASE_ANGLE * v))
+      poseFlap(n.get('flap'), FLAP_RELEASE_ANGLE * v)
       attr(n.get('flap.shadow.soft'), 'transform', `translate(${3 * v} ${10 * v})`)
     },
   })
@@ -262,7 +275,7 @@ export function buildFlapOpen(n: NodeMap): Track[] {
       update: (v) => {
         const deg = from + (180 - from) * v
         const a = deg * rad
-        style(flap, 'transform', BASE.flap(deg))
+        poseFlap(flap, deg)
         style(outerShade, 'backgroundColor', deg < 90 ? shade(outerLight(a), 0.5) : 'transparent')
         style(innerShade, 'backgroundColor', deg > 90 ? shade(Math.max(0, innerLight(a)), 0.75) : 'transparent')
         // the shadow line the closed flap cast on the body fades as it lifts away

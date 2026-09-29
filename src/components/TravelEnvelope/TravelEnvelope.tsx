@@ -1,6 +1,7 @@
 import '@fontsource/libre-caslon-text/400.css'
 import '@fontsource/libre-caslon-text/700.css'
 import '@fontsource/courier-prime/400.css'
+import '@fontsource/zilla-slab/600.css'
 import '@fontsource/cormorant-garamond/500-italic.css'
 import '@fontsource/inter/500.css'
 import '@fontsource/inter/600.css'
@@ -17,7 +18,7 @@ import { Ticket } from './art/Ticket'
 import { Twine } from './art/Twine'
 import { WaxSeal } from './art/WaxSeal'
 import grainUrl from './textures/paper-grain.webp'
-import { ENV, SEALED_FRAME, FLAP_POLY, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, OPEN_RECENTRE, SEQ_SEAL, SEQ_TEAR, TICKET, TICKET_INSIDE, TICKET_PEEK, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
+import { ENV, SEALED_FRAME, FLAP_POLY, FLAP_SIDE, FLAP_TIP, POSE, RIM, SEAL, SEAL_PUDDLE, SEAL_VIEW, OPEN_RECENTRE, SEQ_SEAL, SEQ_TEAR, TICKET, TICKET_INSIDE, TICKET_PEEK, VILLAGE_STAMP, WAVE_STAMP, pctX, pctY } from './constants'
 import { BASE, buildFlapOpen, buildSealBreak, buildTear, buildTicketSlide, createRegistry } from './sequences'
 import { play, wait, type Playback, type PlayOptions, type Track } from './timeline'
 
@@ -25,7 +26,7 @@ const VIEWBOX = `0 0 ${ENV.w} ${ENV.h}`
 const flapPoints = FLAP_POLY.map(([x, y]) => `${x},${y}`).join(' ')
 
 /** Everything outside the flap triangle — where body print may show. */
-const BODY_PRINT_CLIP = `polygon(0 0, ${pctX(FLAP_TIP.x)} ${pctY(FLAP_TIP.y)}, 100% 0, 100% 100%, 0 100%)`
+const BODY_PRINT_CLIP = `polygon(0 ${pctY(FLAP_SIDE.l)}, ${pctX(FLAP_TIP.x)} ${pctY(FLAP_TIP.y)}, 100% ${pctY(FLAP_SIDE.r)}, 100% 100%, 0 100%)`
 
 /**
  * Pocket mouth as an objectBoundingBox clip (0..1), so the pocket panels can be
@@ -355,7 +356,7 @@ export function TravelEnvelope() {
                 <feGaussianBlur stdDeviation="16" />
               </filter>
             </defs>
-            <polygon points={`0,0 ${FLAP_TIP.x},${-FLAP_TIP.y} ${ENV.w},0`} fill="#0c0603" filter="url(#te-flap-desk-blur)" transform="translate(26 22)" />
+            <polygon points={FLAP_POLY.map(([x, y]) => `${x},${-y}`).join(' ')} fill="#0c0603" filter="url(#te-flap-desk-blur)" transform="translate(26 22)" />
           </svg>
 
           {/* ---- top flap (hinged on the top edge) ---- */}
@@ -400,6 +401,12 @@ export function TravelEnvelope() {
               tip, lets go of the body paper and rides the flap open (hidden once
               the flap is past vertical). Both pieces live here, shadows first.
             */}
+            {/*
+              The twine is drawn in the flap's (flat) plane so it paints exactly
+              between the flap paper and the wax at rest. It is gone (recoiled)
+              before the flap starts to swing.
+            */}
+            <Twine register={register} />
             <div className="te-seal-half te-seal-half--flap-shadow" style={SEAL_BOX}>
               <WaxSeal part="flap" layer="shadow" register={register} />
             </div>
@@ -414,8 +421,7 @@ export function TravelEnvelope() {
             </div>
           </div>
 
-          {/* ---- twine, the flake of wax that stays behind, and the seal's hit area ---- */}
-          <Twine register={register} />
+          {/* ---- the flake of wax that stays behind, and the seal's hit area ---- */}
           <div className="te-seal-half te-seal-half--chip" style={SEAL_BOX} aria-hidden="true">
             <WaxSeal part="body" layer="chip" register={register} />
           </div>

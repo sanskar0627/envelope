@@ -12,7 +12,8 @@
  * grain), so ring, recessed die face and emblem all catch the top-left key.
  */
 import { useId } from 'react'
-import { ENV, FLAP_TIP, SEAL_VIEW, toSeal } from '../constants'
+import { ENV, FLAP_SIDE, FLAP_TIP, SEAL, SEAL_VIEW, toSeal } from '../constants'
+import { CORDS, TAIL, waxCrossing } from './twineGeometry'
 import { blobPath, rng } from './geometry'
 
 const PUDDLE = blobPath(96, 7, 0.11, 26)
@@ -92,11 +93,10 @@ const PITS = (() => {
   return out
 })()
 
-/** where the twine runs under the wax: the wax bulges over each strand at the rim (seal space) */
-const TWINE_RIDGES: Array<[number, number, number]> = [
-  [-3.5, -86, -4], [1.4, -86, -3], [14.6, -85, 1], [19.8, -85, 1],
-  [-18, 86, 8], [-12.6, 86, 7], [17.6, 86, 1], [23, 86, 1],
-]
+/** where the twine runs under the wax: the wax bulges over each cord at the rim (seal space) */
+const TWINE_RIDGES: Array<[number, number, number]> = [...CORDS.map(([d]) => d), TAIL[0]].flatMap((d) =>
+  waxCrossing(d, SEAL.d / 2 - 6).map(([x, y]) => [x, y, (Math.atan2(y, x) * 180) / Math.PI + 90] as [number, number, number]),
+)
 
 /* ------------------------------------------------------------------ fracture geometry */
 
@@ -122,8 +122,8 @@ function fractureArm(toX: number, toY: number, seed: number): Pt[] {
   return pts
 }
 
-const ARM_L = fractureArm(0, 0, 3)
-const ARM_R = fractureArm(ENV.w, 0, 5)
+const ARM_L = fractureArm(0, FLAP_SIDE.l, 3)
+const ARM_R = fractureArm(ENV.w, FLAP_SIDE.r, 5)
 /** full fracture polyline, left rim → tip → right rim */
 const FRACTURE: Pt[] = [...ARM_L.slice().reverse(), ...ARM_R.slice(1)]
 
@@ -271,7 +271,7 @@ export function WaxSeal({ part, layer, register }: { part: SealPart; layer: 'sha
               <path d={PUDDLE} fill="#8a8a8a" />
               <path d={PUDDLE_INNER} fill="#9a9a9a" />
               {TWINE_RIDGES.map(([x, y, rot], i) => (
-                <ellipse key={`tr${i}`} cx={x} cy={y} rx={2.6} ry={9} transform={`rotate(${rot} ${x} ${y})`} fill="#8c8c8c" />
+                <ellipse key={`tr${i}`} cx={x} cy={y} rx={3.4} ry={9} transform={`rotate(${rot} ${x} ${y})`} fill="#8c8c8c" />
               ))}
               <circle r={68} fill="none" stroke="#c4c4c4" strokeWidth={12} />
               <circle r={61} fill="#7d7d7d" />

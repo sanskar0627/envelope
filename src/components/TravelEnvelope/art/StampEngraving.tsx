@@ -1,19 +1,18 @@
 /**
- * Engraved (intaglio) artwork for the two postage stamps, in envelope units.
+ * Engraved (intaglio) artwork for the two postage stamps, in envelope units,
+ * composed after the photographed reference:
  *
- * Built the way a line engraver works: tone comes from line density and line
- * weight, never from fills. Sky is ruled with fine lines that thicken toward
- * the horizon; the cliff is modelled with contour lines that follow the rock
- * plus cross-hatching in the shadows; the sea is rows of swell lines, heavier
- * and wider-spaced toward the viewer, broken where light glints; whitewashed
- * buildings are left as paper (white knock-outs) with just their outlines and
- * dark doorways. A beaded frame and a ruled value tablet finish the design.
+ *  - main stamp: a tall caldera crag fills the upper right (crag outlines and
+ *    short vertical rock strokes), a band of choppy sea runs diagonally across
+ *    the middle, whitewashed cubes step down the slope on the right, and a
+ *    domed church with arched windows stands in the lower middle with houses
+ *    beside it. Tone comes only from line density and weight.
+ *  - small stamp: two heavy curling waves, each a band of close parallel cuts.
  */
 import { VILLAGE_STAMP, WAVE_STAMP } from '../constants'
-import { rng, wavePath } from './geometry'
+import { rng } from './geometry'
 
 const INK = '#2b2723'
-const SERIF = "'Libre Caslon Text', 'Times New Roman', serif"
 const f = (n: number) => Math.round(n * 10) / 10
 
 type Pt = [number, number]
@@ -63,342 +62,285 @@ function curve(pts: Pt[]) {
 
 export function VillageStampInk() {
   const { x, y, w, h } = VILLAGE_STAMP
-  const ix = x + 34
-  const iy = y + 34
-  const iw = w - 68
-  const ih = h - 118
+  const ix = x + 26
+  const iy = y + 26
+  const iw = w - 52
+  const ih = h - 52
   const N = P(ix, iy, iw, ih)
+  const U = (u: number) => ix + u * iw
+  const V = (v: number) => iy + v * ih
   const r = rng(77)
-  const HZ = 0.43 // horizon
+  const clip = 'te-eng-village'
 
-  // caldera cliff: crest line from the sea up to the top-right
-  const crest: Pt[] = [
-    [0.44, 0.66], [0.47, 0.55], [0.5, 0.47], [0.55, 0.41], [0.6, 0.34], [0.64, 0.3], [0.7, 0.24], [0.76, 0.2], [0.83, 0.15], [0.9, 0.12], [1.02, 0.1],
+  /* ---- the crag: jagged left contour from the top down into the sea ---- */
+  const cragEdge: Pt[] = [
+    [0.52, -0.02], [0.55, 0.05], [0.51, 0.1], [0.56, 0.15], [0.54, 0.2], [0.6, 0.25], [0.57, 0.3], [0.63, 0.35], [0.6, 0.4], [0.66, 0.45], [0.7, 0.5], [0.8, 0.53], [1.02, 0.55],
   ]
-  const cliffFoot: Pt[] = [[1.02, 1.02], [0.52, 1.02], [0.47, 0.84], [0.44, 0.66]]
-  const cliff = poly(N([...crest, ...cliffFoot]))
-  // distant island on the horizon, left
-  const island = poly(N([[-0.02, HZ], [-0.02, 0.37], [0.05, 0.345], [0.1, 0.36], [0.16, 0.325], [0.22, 0.31], [0.27, 0.335], [0.33, 0.35], [0.38, 0.375], [0.42, 0.4], [0.46, HZ]]))
-  const sea = poly(N([[-0.02, HZ], [0.6, HZ], [0.44, 0.66], [0.47, 0.84], [0.52, 1.02], [-0.02, 1.02]]))
-
-  // contour lines following the rock face (strata), clipped to the cliff
-  const strata: string[] = []
-  for (let k = 1; k < 16; k++) {
-    const pts = crest.map(([u, v], i) => [u + 0.004 * k + (r() - 0.5) * 0.006, v + k * 0.028 + Math.sin(i * 1.7 + k) * 0.006] as Pt)
-    strata.push(curve(N(pts)))
+  const crag = poly(N([...cragEdge, [1.02, -0.02]]))
+  // crag faces: a few internal crag outlines following the rock, then short vertical cuts
+  const cragLines: string[] = []
+  for (let k = 1; k < 4; k++) {
+    const pts = cragEdge.slice(0, 11).map(([u, v], i) => [u + k * 0.055 + Math.sin(i * 2.1 + k) * 0.012, v + k * 0.01] as Pt)
+    cragLines.push(curve(N(pts)))
   }
+  // rock face: columns of jointed rock, each a jagged vertical contour with short cross-joints
+  const rock: string[] = []
+  for (let c = 0; c < 11; c++) {
+    const u0 = 0.56 + c * 0.042 + (r() - 0.5) * 0.01
+    let v = -0.02
+    let u = u0
+    let d = `M${f(U(u))} ${f(V(v))}`
+    while (v < 0.52) {
+      v += 0.025 + r() * 0.03
+      u = u0 + (r() - 0.5) * 0.02
+      d += ` L${f(U(u))} ${f(V(v))}`
+      if (r() < 0.35) rock.push(`M${f(U(u))} ${f(V(v))} l${f(iw * (0.012 + r() * 0.022))} ${f((r() - 0.5) * 4)}`)
+    }
+    rock.push(d)
+  }
+  // scrub and a lone tree on the crest
+  const tree = `M${f(U(0.64))} ${f(V(0.035))} q-10 -4 -8 -14 q-6 -10 6 -14 q4 -10 14 -5 q10 -4 12 6 q10 4 4 13 q2 10 -10 10 q-6 6 -18 4 Z`
 
-  // houses cascading down below the crest (paper-white knock-outs)
-  type House = { x: number; y: number; w: number; h: number }
-  const houses: House[] = []
-  for (let t = 0.1; t < 0.98; t += 0.034) {
-    const idx = t * (crest.length - 1)
-    const i0 = Math.floor(idx)
-    const i1 = Math.min(crest.length - 1, i0 + 1)
-    const k = idx - i0
-    const cu = crest[i0][0] + (crest[i1][0] - crest[i0][0]) * k
-    const cv = crest[i0][1] + (crest[i1][1] - crest[i0][1]) * k
-    const rows = 3 + Math.floor(r() * 3) + (t > 0.4 ? 2 : 0)
-    for (let row = 0; row < rows; row++) {
-      const hw = 11 + r() * 11
-      const hh = 9 + r() * 7
-      const hx = ix + cu * iw + (r() - 0.3) * 10
-      const hy = iy + cv * ih + 4 + row * (hh + 3 + r() * 5)
-      if (hy > iy + ih * 0.66 || hx + hw > ix + iw - 4) continue
-      houses.push({ x: hx, y: hy, w: hw, h: hh })
+  /* ---- the sea band: choppy wave rows running diagonally, lighter where it meets the crag ---- */
+  const seaTop = (u: number) => 0.62 - 0.28 * u // upper boundary (rises to the right)
+  const waves: Array<{ d: string; w: number }> = []
+  for (let k = 0; k < 34; k++) {
+    const t = k / 33
+    const u0 = -0.15
+    const pts: Pt[] = []
+    const off = 0.02 + t * 0.34
+    for (let u = u0; u <= 1.02; u += 0.04) {
+      const v = seaTop(u) + off + Math.sin(u * 60 + k * 1.7) * 0.006
+      pts.push([u, v])
+    }
+    const amp = 2 + t * 3
+    // choppy strokes: short arcs along the row with gaps where light glints
+    let d = ''
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (r() < 0.18) continue
+      const [a, b] = N([pts[i], pts[i + 1]])
+      const mx = (a[0] + b[0]) / 2
+      const my = (a[1] + b[1]) / 2 - amp * (r() < 0.5 ? 1 : 1.6)
+      d += `M${f(a[0])} ${f(a[1])} Q${f(mx)} ${f(my)} ${f(b[0])} ${f(b[1])} `
+    }
+    waves.push({ d, w: 1.3 + t * 1.3 })
+  }
+  const seaClip = poly(N([[-0.2, seaTop(-0.2)], [1.05, seaTop(1.05)], [1.05, 1.05], [-0.2, 1.05]]))
+
+  /* ---- whitewashed cubes stepping down the slope on the right ---- */
+  type Box = { x: number; y: number; w: number; h: number }
+  const cubes: Box[] = []
+  const rc = rng(31)
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) {
+      const u = 0.74 + col * 0.068 + (row % 2) * 0.03 + (rc() - 0.5) * 0.02
+      const v = 0.52 + row * 0.055 + (rc() - 0.5) * 0.012
+      if (u > 0.98 || rc() < 0.12) continue
+      cubes.push({ x: U(u), y: V(v), w: iw * (0.05 + rc() * 0.03), h: ih * (0.038 + rc() * 0.02) })
     }
   }
-  houses.sort((a, b) => a.y - b.y)
+  cubes.sort((a, b) => a.y - b.y)
 
-  // foreground church, bottom-right
-  const ch = { x: ix + iw * 0.6, y: iy + ih * 0.76, w: iw * 0.3, h: ih * 0.2 }
-  const dome = { cx: ch.x + ch.w * 0.42, cy: ch.y, r: ch.w * 0.27 }
-  // meridians over the dome, bunched toward the shaded (right) side
-  const domeLines: string[] = []
-  for (let k = -4; k <= 6; k++) {
-    const s = Math.sign(k) * (Math.abs(k) / 6.5) ** 0.8
-    const bx = dome.cx + s * dome.r
-    domeLines.push(`M${f(bx)} ${f(dome.cy)} Q${f(dome.cx + s * dome.r * 0.95)} ${f(dome.cy - dome.r * 0.9)} ${f(dome.cx)} ${f(dome.cy - dome.r * 1.02)}`)
+  /* ---- the church ---- */
+  const ch = { x: U(0.3), y: V(0.66), w: iw * 0.42, h: ih * 0.34 }
+  const dome = { cx: ch.x + ch.w * 0.5, cy: ch.y, r: ch.w * 0.24 }
+  const ribs: string[] = []
+  for (let k = -5; k <= 5; k++) {
+    const sgn = k / 5.5
+    ribs.push(`M${f(dome.cx + sgn * dome.r)} ${f(dome.cy)} Q${f(dome.cx + sgn * dome.r * 0.92)} ${f(dome.cy - dome.r * 0.9)} ${f(dome.cx)} ${f(dome.cy - dome.r * 1.08)}`)
   }
+  const arch = (ax: number, ay: number, aw: number, ah: number) => `M${f(ax)} ${f(ay + ah)} V${f(ay + aw / 2)} A${f(aw / 2)} ${f(aw / 2)} 0 0 1 ${f(ax + aw)} ${f(ay + aw / 2)} V${f(ay + ah)} Z`
+  const courses: string[] = []
+  for (let yy = ch.y + 10; yy < ch.y + ch.h; yy += 7) {
+    for (let xx = ch.x + 4 + ((yy / 7) % 2) * 6; xx < ch.x + ch.w - 8; xx += 12 + r() * 10) courses.push(`M${f(xx)} ${f(yy)} h${f(4 + r() * 5)}`)
+  }
+  const sideHouses: Box[] = [
+    { x: U(0.74), y: V(0.78), w: iw * 0.12, h: ih * 0.22 },
+    { x: U(0.86), y: V(0.72), w: iw * 0.15, h: ih * 0.28 },
+    { x: U(0.14), y: V(0.84), w: iw * 0.15, h: ih * 0.16 },
+  ]
 
-  const clip = 'te-eng-village'
   return (
     <>
-    {/* plate slightly out of register on a second pass: a faint offset ghost of the linework */}
-    <use href="#te-eng-village-art" transform="translate(1.4 -0.9)" opacity={0.12} />
-    <g id="te-eng-village-art" stroke={INK} fill="none" strokeLinecap="round" strokeLinejoin="round">
-      <defs>
-        <clipPath id={`${clip}-img`}>
-          <rect x={ix} y={iy} width={iw} height={ih} />
-        </clipPath>
-        <clipPath id={`${clip}-cliff`}>
-          <path d={cliff} />
-        </clipPath>
-        <clipPath id={`${clip}-sea`}>
-          <path d={sea} />
-        </clipPath>
-        <clipPath id={`${clip}-island`}>
-          <path d={island} />
-        </clipPath>
-        <clipPath id={`${clip}-dome`}>
-          <path d={`M${dome.cx - dome.r} ${dome.cy} A${dome.r} ${dome.r * 1.02} 0 0 1 ${dome.cx + dome.r} ${dome.cy} Z`} />
-        </clipPath>
-        <clipPath id={`${clip}-tablet`}>
-          <rect x={ix} y={iy + ih + 8} width={iw} height={h - ih - 34 - 8 - 22} />
-        </clipPath>
-      </defs>
+      {/* plate slightly out of register on a second pass: a faint offset ghost of the linework */}
+      <use href="#te-eng-village-art" transform="translate(1.4 -0.9)" opacity={0.1} />
+      <g id="te-eng-village-art" stroke={INK} fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <defs>
+          <clipPath id={`${clip}-img`}>
+            <rect x={ix} y={iy} width={iw} height={ih} />
+          </clipPath>
+          <clipPath id={`${clip}-crag`}>
+            <path d={crag} />
+          </clipPath>
+          <clipPath id={`${clip}-sea`}>
+            <path d={seaClip} />
+          </clipPath>
+          <clipPath id={`${clip}-dome`}>
+            <path d={`M${dome.cx - dome.r} ${dome.cy} A${dome.r} ${dome.r * 1.08} 0 0 1 ${dome.cx + dome.r} ${dome.cy} Z`} />
+          </clipPath>
+        </defs>
 
-      {/* ---- frame: fine outer rule, beaded band, heavy inner rule ---- */}
-      <rect x={x + 14} y={y + 14} width={w - 28} height={h - 28} strokeWidth={1.3} />
-      <rect x={x + 18} y={y + 18} width={w - 36} height={h - 36} strokeWidth={0.7} />
-      <g fill={INK} stroke="none">
-        {Array.from({ length: Math.floor((w - 56) / 9) }, (_, i) => (
-          <g key={`bx${i}`}>
-            <circle cx={x + 28 + i * 9} cy={y + 26} r={1.6} />
-          </g>
-        ))}
-        {Array.from({ length: Math.floor((h - 56) / 9) }, (_, i) => (
-          <g key={`by${i}`}>
-            <circle cx={x + 26} cy={y + 28 + i * 9} r={1.6} />
-            <circle cx={x + w - 26} cy={y + 28 + i * 9} r={1.6} />
-          </g>
-        ))}
-      </g>
-      {/* corner rosettes */}
-      {[
-        [x + 26, y + 26],
-        [x + w - 26, y + 26],
-      ].map(([cx, cy], i) => (
-        <g key={`ro${i}`} strokeWidth={1}>
-          <circle cx={cx} cy={cy} r={5.5} fill="#fff" />
-          <circle cx={cx} cy={cy} r={2} fill={INK} stroke="none" />
-        </g>
-      ))}
+        {/* printed frame: a fine rule just inside the perforations */}
+        <rect x={x + 12} y={y + 12} width={w - 24} height={h - 24} strokeWidth={1.1} />
+        <rect x={ix} y={iy} width={iw} height={ih} strokeWidth={2.2} />
 
-      <g clipPath={`url(#${clip}-img)`}>
-        {/* ---- sky: ruled lines thickening toward the horizon ---- */}
-        {Array.from({ length: Math.floor((ih * HZ) / 5.2) }, (_, i) => {
-          const yy = iy + 3 + i * 5.2
-          const t = (yy - iy) / (ih * HZ)
-          return <path key={`s${i}`} d={`M${ix} ${f(yy)} H${ix + iw}`} strokeWidth={f(0.45 + t * 0.9)} opacity={0.75 + t * 0.25} />
-        })}
-        {/* clouds: paper knocked out of the sky, shaded underneath */}
-        {[
-          [0.06, 0.08, 0.34],
-          [0.3, 0.2, 0.26],
-        ].map(([u, v, s], i) => {
-          const cx = ix + u * iw
-          const cy = iy + v * ih
-          const W = s * iw
-          const d = `M${cx} ${cy} q${W * 0.08} ${-W * 0.16} ${W * 0.22} ${-W * 0.08} q${W * 0.1} ${-W * 0.18} ${W * 0.28} ${-W * 0.05} q${W * 0.16} ${-W * 0.1} ${W * 0.26} ${W * 0.06} q${W * 0.14} ${W * 0.02} ${W * 0.12} ${W * 0.12} Z`
-          return (
-            <g key={`c${i}`}>
-              <path d={d} fill="#fff" stroke="none" transform="translate(0 -2) scale(1)" />
-              <path d={d} strokeWidth={1.1} />
-              <path d={`M${cx + W * 0.1} ${cy - 3} q${W * 0.3} 3 ${W * 0.7} -1`} strokeWidth={0.8} />
-            </g>
-          )
-        })}
-        {/* sun low over the island */}
-        <circle cx={ix + iw * 0.24} cy={iy + ih * 0.27} r={13} fill="#fff" strokeWidth={1.2} />
-
-        {/* ---- distant island: dense fine hatch, a few ridge contours ---- */}
-        <path d={island} fill="#fff" stroke="none" />
-        <g clipPath={`url(#${clip}-island)`}>
-          <path d={rules(ix, iy + ih * 0.28, iw * 0.5, ih * 0.18, -28, 2.6, 5, 0.4)} strokeWidth={0.8} />
-          <path d={rules(ix, iy + ih * 0.28, iw * 0.5, ih * 0.18, 0, 3.4, 6, 0.2)} strokeWidth={0.55} opacity={0.8} />
-        </g>
-        <path d={island} strokeWidth={1.4} />
-
-        {/* ---- sea: swell lines, heavier and wider apart toward the viewer, broken by glints ---- */}
-        <path d={sea} fill="#fff" stroke="none" />
-        <g clipPath={`url(#${clip}-sea)`}>
-          {Array.from({ length: 40 }, (_, i) => {
-            const t = i / 39
-            const yy = iy + ih * HZ + 3 + (ih * (1 - HZ)) * (t * 0.35 + t * t * 0.65)
-            const dash = `${f(30 + r() * 90)} ${f(3 + r() * 7)} ${f(20 + r() * 60)} ${f(2 + r() * 5)}`
+        <g clipPath={`url(#${clip}-img)`}>
+          {/* sky: loose engraved cloud curls */}
+          {[
+            [0.06, 0.07, 0.3],
+            [0.22, 0.16, 0.22],
+            [0.08, 0.26, 0.18],
+          ].map(([u, v, s0], i) => {
+            const W = s0 * iw
+            const cx = U(u)
+            const cy = V(v)
             return (
-              <path
-                key={`w${i}`}
-                d={wavePath(ix - 20, ix + iw * 0.62, yy, 0.7 + t * 2.4, 12 + t * 26, i * 1.7)}
-                strokeWidth={f(0.7 + t * 1.4)}
-                strokeDasharray={dash}
-                strokeDashoffset={f(r() * 80)}
-              />
+              <g key={`cl${i}`} strokeWidth={1.1}>
+                <path d={`M${f(cx)} ${f(cy)} q${f(W * 0.12)} ${f(-W * 0.14)} ${f(W * 0.26)} ${f(-W * 0.04)} q${f(W * 0.1)} ${f(-W * 0.14)} ${f(W * 0.26)} ${f(-W * 0.02)} q${f(W * 0.16)} ${f(-W * 0.06)} ${f(W * 0.24)} ${f(W * 0.06)}`} />
+                <path d={`M${f(cx + W * 0.08)} ${f(cy + 5)} q${f(W * 0.3)} 4 ${f(W * 0.7)} -2`} strokeWidth={0.7} />
+                <path d={`M${f(cx + W * 0.2)} ${f(cy + 10)} q${f(W * 0.2)} 3 ${f(W * 0.45)} -1`} strokeWidth={0.6} />
+              </g>
             )
           })}
-          {/* glitter path under the sun */}
-          {Array.from({ length: 10 }, (_, i) => (
-            <path key={`g${i}`} d={`M${f(ix + iw * 0.24 - 10 + r() * 20)} ${f(iy + ih * (HZ + 0.02 + i * 0.02))} h${f(4 + r() * 8)}`} stroke="#fff" strokeWidth={2.2} />
+          {/* birds */}
+          {[
+            [0.36, 0.06],
+            [0.42, 0.09],
+          ].map(([u, v], i) => (
+            <path key={`b${i}`} d={`M${f(U(u))} ${f(V(v))} q5 -5 9 0 q4 -5 9 0`} strokeWidth={1} />
           ))}
-        </g>
 
-        {/* sailing boat */}
-        <g strokeWidth={1.2} fill="#fff">
-          <path d={`M${ix + iw * 0.12} ${iy + ih * 0.585} h36 l-6 7 h-25 Z`} />
-          <path d={`M${ix + iw * 0.12 + 18} ${iy + ih * 0.58} v-38 l18 34 Z`} />
-          <path d={`M${ix + iw * 0.12 + 16} ${iy + ih * 0.58} v-29 l-13 25 Z`} />
-          <path d={`M${ix + iw * 0.12 - 4} ${iy + ih * 0.6} q24 4 44 0`} strokeWidth={0.8} fill="none" />
-        </g>
-
-        {/* ---- cliff: paper, then contour strata, then cross-hatch in the shade ---- */}
-        <path d={cliff} fill="#fff" stroke="none" />
-        <g clipPath={`url(#${clip}-cliff)`}>
-          {strata.map((d, i) => (
-            <path key={`st${i}`} d={d} strokeWidth={f(0.7 + (i % 3) * 0.25)} opacity={0.9} />
-          ))}
-          <path d={rules(ix + iw * 0.4, iy + ih * 0.35, iw * 0.35, ih * 0.7, 62, 3.4, 12, 0.5)} strokeWidth={0.75} />
-          <path d={rules(ix + iw * 0.42, iy + ih * 0.55, iw * 0.3, ih * 0.5, -28, 4.2, 13, 0.5)} strokeWidth={0.65} opacity={0.85} />
-          <path d={rules(ix + iw * 0.6, iy + ih * 0.1, iw * 0.45, ih * 0.9, 50, 5.5, 14, 0.5)} strokeWidth={0.6} opacity={0.7} />
-          {/* deepest shade low on the face: a third, finer hatch direction */}
-          <path d={rules(ix + iw * 0.44, iy + ih * 0.66, iw * 0.2, ih * 0.36, 8, 2.3, 15, 0.3)} strokeWidth={0.5} opacity={0.9} />
-          {/* stippled rock texture along the strata */}
-          {Array.from({ length: 140 }, (_, i) => (
-            <circle key={`dt${i}`} cx={f(ix + iw * (0.45 + r() * 0.55))} cy={f(iy + ih * (0.1 + r() * 0.9))} r={f(0.5 + r() * 0.6)} fill={INK} stroke="none" opacity={0.7} />
-          ))}
-        </g>
-        {/* surf working along the foot of the cliff, and a few rocks awash */}
-        {Array.from({ length: 9 }, (_, i) => {
-          const t = i / 8
-          const u = 0.44 + 0.08 * t * t
-          const v = 0.66 + 0.36 * t
-          return <path key={`sf${i}`} d={`M${f(ix + iw * (u - 0.1))} ${f(iy + ih * v)} q${f(iw * 0.04)} ${f(-3)} ${f(iw * 0.09)} ${f(-1)}`} strokeWidth={0.7} strokeDasharray="6 3 10 2" />
-        })}
-        {[
-          [0.36, 0.78, 7],
-          [0.4, 0.9, 5],
-          [0.31, 0.95, 4],
-        ].map(([u, v, rr], i) => (
-          <g key={`rk${i}`}>
-            <path d={`M${f(ix + iw * u - rr * 1.6)} ${f(iy + ih * v)} q${f(rr * 0.4)} ${f(-rr * 1.3)} ${f(rr * 1.6)} ${f(-rr * 1.1)} q${f(rr * 1.2)} 0 ${f(rr * 1.6)} ${f(rr * 1.1)} Z`} fill="#fff" strokeWidth={1} />
-            {/* shaded flank of the rock */}
-            <path d={`M${f(ix + iw * u + rr * 0.5)} ${f(iy + ih * v - rr * 0.8)} l${f(rr * 0.5)} ${f(rr * 0.7)} M${f(ix + iw * u + rr * 0.9)} ${f(iy + ih * v - rr * 0.9)} l${f(rr * 0.5)} ${f(rr * 0.8)} M${f(ix + iw * u + rr * 0.1)} ${f(iy + ih * v - rr * 0.6)} l${f(rr * 0.4)} ${f(rr * 0.55)}`} strokeWidth={0.55} />
-          </g>
-        ))}
-        <path d={curve(N(crest))} strokeWidth={1.8} />
-        <path d={curve(N([[0.44, 0.66], [0.46, 0.76], [0.48, 0.86], [0.52, 1.02]]))} strokeWidth={1.4} />
-
-        {/* scrub and a tree on the crest */}
-        {[0.7, 0.77, 0.85].map((u, i) => {
-          const cx = ix + u * iw
-          const cy = iy + ih * (0.24 - (u - 0.7) * 0.6) - 2
-          return <path key={`sc${i}`} d={`M${f(cx - 8)} ${f(cy)} q2 -9 8 -10 q7 0 8 10 Z`} strokeWidth={1} fill={INK} fillOpacity={0.35} />
-        })}
-        <g strokeWidth={1.1}>
-          <path d={`M${ix + iw * 0.93} ${iy + ih * 0.11} v-18`} strokeWidth={1.6} />
-          <path
-            d={`M${ix + iw * 0.93 - 18} ${iy + ih * 0.11 - 16} q-4 -12 8 -16 q2 -12 14 -9 q10 -6 16 4 q12 2 8 14 q4 10 -8 12 q-10 6 -20 1 q-14 2 -18 -6 Z`}
-            fill="#fff"
-          />
-          {Array.from({ length: 14 }, (_, i) => (
-            <path key={`lf${i}`} d={`M${f(ix + iw * 0.93 - 14 + r() * 30)} ${f(iy + ih * 0.11 - 34 + r() * 20)} q2 -2 4 0`} strokeWidth={0.9} />
-          ))}
-        </g>
-
-        {/* whitewashed houses */}
-        <g fill="#fff" strokeWidth={1.1}>
-          {houses.map((hs, i) => (
-            <g key={`h${i}`}>
-              <rect x={hs.x} y={hs.y} width={hs.w} height={hs.h} rx={1.8} />
-              {/* shaded side wall */}
-              <path d={vlines(hs.x + hs.w * 0.72, hs.y, hs.w * 0.28, hs.h, 1.9)} strokeWidth={0.5} />
-              <path d={`M${f(hs.x + hs.w * 0.72)} ${f(hs.y)} V${f(hs.y + hs.h)}`} strokeWidth={0.7} />
-              {/* doorway and window */}
-              <path d={`M${f(hs.x + hs.w * 0.2)} ${f(hs.y + hs.h)} v${f(-hs.h * 0.45)} a${f(hs.w * 0.08)} ${f(hs.w * 0.08)} 0 0 1 ${f(hs.w * 0.16)} 0 v${f(hs.h * 0.45)}`} fill={INK} stroke="none" />
-              <rect x={hs.x + hs.w * 0.48} y={hs.y + hs.h * 0.28} width={hs.w * 0.12} height={hs.h * 0.22} fill={INK} stroke="none" />
-            </g>
-          ))}
-        </g>
-
-        {/* ---- foreground church: big hatched dome, cross, arcades, bell tower ---- */}
-        <g fill="#fff" strokeWidth={1.3}>
-          <rect x={ch.x - 18} y={ch.y + ch.h * 0.1} width={ch.w + 40} height={ch.h + 20} />
-          <rect x={ch.x} y={ch.y} width={ch.w * 0.84} height={ch.h} />
-          <path d={`M${dome.cx - dome.r - 6} ${dome.cy} h${dome.r * 2 + 12} v6 h-${dome.r * 2 + 12} Z`} />
-          <path d={`M${dome.cx - dome.r} ${dome.cy} A${dome.r} ${dome.r * 1.02} 0 0 1 ${dome.cx + dome.r} ${dome.cy} Z`} />
-          <g clipPath={`url(#${clip}-dome)`}>
-            {domeLines.map((d, i) => (
-              <path key={`dm${i}`} d={d} fill="none" strokeWidth={0.8} />
+          {/* ---- crag ---- */}
+          <path d={crag} fill="#fff" stroke="none" />
+          <g clipPath={`url(#${clip}-crag)`}>
+            {cragLines.map((d, i) => (
+              <path key={`cr${i}`} d={d} strokeWidth={0.9 + (i % 2) * 0.4} />
             ))}
-            <path d={rules(dome.cx, dome.cy - dome.r, dome.r, dome.r, 90, 2.1, 21, 0.1)} strokeWidth={0.7} fill="none" />
+            <path d={rock.join(' ')} strokeWidth={1.3} />
+            {/* shade on the rock faces: fine vertical cuts on the right of each column */}
+            <path d={rules(U(0.6), V(0), iw * 0.42, ih * 0.52, 88, 3.4, 12, 0.4)} strokeWidth={0.45} opacity={0.75} />
           </g>
-          <path d={`M${dome.cx} ${dome.cy - dome.r * 1.02} v-20 M${dome.cx - 7} ${dome.cy - dome.r * 1.02 - 13} h14`} strokeWidth={2} fill="none" />
-          {/* arcade */}
-          {[0.12, 0.34, 0.56].map((u, i) => {
-            const ax = ch.x + ch.w * u
-            return <path key={`ar${i}`} d={`M${f(ax)} ${f(ch.y + ch.h)} v${f(-ch.h * 0.5)} a${f(ch.w * 0.07)} ${f(ch.w * 0.07)} 0 0 1 ${f(ch.w * 0.14)} 0 v${f(ch.h * 0.5)}`} fill={INK} stroke="none" />
-          })}
-          {/* bell tower */}
-          <rect x={ch.x + ch.w * 0.86} y={ch.y - ch.h * 0.55} width={ch.w * 0.2} height={ch.h * 1.55} />
-          <path d={`M${ch.x + ch.w * 0.86} ${ch.y - ch.h * 0.55} q${ch.w * 0.1} -16 ${ch.w * 0.2} 0`} />
-          <path d={`M${ch.x + ch.w * 0.96} ${ch.y - ch.h * 0.55 - 8} v-14 M${ch.x + ch.w * 0.96 - 5} ${ch.y - ch.h * 0.55 - 16} h10`} strokeWidth={1.5} fill="none" />
-          <path d={`M${ch.x + ch.w * 0.9} ${ch.y - ch.h * 0.1} v-14 a${ch.w * 0.06} ${ch.w * 0.06} 0 0 1 ${ch.w * 0.12} 0 v14 Z`} fill={INK} stroke="none" />
-          <path d={vlines(ch.x + ch.w * 0.99, ch.y - ch.h * 0.55, ch.w * 0.07, ch.h * 1.55, 1.9)} strokeWidth={0.55} fill="none" />
-          <path d={vlines(ch.x + ch.w * 0.7, ch.y, ch.w * 0.14, ch.h, 2.2)} strokeWidth={0.55} fill="none" />
-          {/* steps down to the water */}
+          <path d={curve(N(cragEdge.slice(0, 11)))} strokeWidth={1.8} />
+          <path d={tree} strokeWidth={1.1} fill="#fff" />
+          <path d={`M${f(U(0.645))} ${f(V(0.035))} v10`} strokeWidth={1.4} />
+
+          {/* ---- sea ---- */}
+          <g clipPath={`url(#${clip}-sea)`}>
+            <path d={seaClip} fill="#fff" stroke="none" />
+            {waves.map((wv, i) => (
+              <path key={`wv${i}`} d={wv.d} strokeWidth={f(wv.w)} />
+            ))}
+          </g>
+
+          {/* ---- cubes on the slope ---- */}
+          <g fill="#fff" strokeWidth={1.4}>
+            {cubes.map((b, i) => (
+              <g key={`cu${i}`}>
+                <rect x={b.x} y={b.y} width={b.w} height={b.h} />
+                <path d={vlines(b.x + b.w * 0.7, b.y, b.w * 0.3, b.h, 1.9)} strokeWidth={0.5} />
+                <path d={arch(b.x + b.w * 0.18, b.y + b.h * 0.35, b.w * 0.18, b.h * 0.65)} fill={INK} stroke="none" />
+                <path d={`M${f(b.x - 1)} ${f(b.y)} h${f(b.w + 2)}`} strokeWidth={1.4} />
+              </g>
+            ))}
+          </g>
+
+          {/* ---- houses beside the church ---- */}
+          <g fill="#fff" strokeWidth={1.2}>
+            {sideHouses.map((b, i) => (
+              <g key={`sh${i}`}>
+                <rect x={b.x} y={b.y} width={b.w} height={b.h} />
+                <path d={`M${f(b.x - 2)} ${f(b.y)} h${f(b.w + 4)}`} strokeWidth={1.8} />
+                <path d={vlines(b.x + b.w * 0.74, b.y + 1, b.w * 0.26, b.h - 1, 2)} strokeWidth={0.55} />
+                <path d={arch(b.x + b.w * 0.14, b.y + b.h * 0.3, b.w * 0.16, b.h * 0.34)} fill={INK} stroke="none" />
+                <path d={arch(b.x + b.w * 0.42, b.y + b.h * 0.3, b.w * 0.16, b.h * 0.34)} fill={INK} stroke="none" />
+                {i === 1 && <path d={`M${f(b.x + b.w * 0.5)} ${f(b.y)} v-10 a8 8 0 0 1 16 0 v10`} strokeWidth={1} />}
+              </g>
+            ))}
+          </g>
+
+          {/* ---- the church: stone body, big ribbed dome, lantern and cross, side domes, arcade ---- */}
+          <g fill="#fff" strokeWidth={1.9}>
+            <rect x={ch.x} y={ch.y} width={ch.w} height={ch.h} />
+            <path d={courses.join(' ')} strokeWidth={0.9} fill="none" />
+            <path d={vlines(ch.x + ch.w * 0.82, ch.y, ch.w * 0.18, ch.h, 2)} strokeWidth={0.55} fill="none" />
+            {/* drum */}
+            <rect x={dome.cx - dome.r * 0.92} y={dome.cy - 2} width={dome.r * 1.84} height={14} />
+            {[-0.6, -0.2, 0.2, 0.6].map((k) => (
+              <path key={`dw${k}`} d={arch(dome.cx + k * dome.r - 3, dome.cy + 1, 6, 10)} fill={INK} stroke="none" />
+            ))}
+            {/* dome */}
+            <path d={`M${dome.cx - dome.r} ${dome.cy} A${dome.r} ${dome.r * 1.08} 0 0 1 ${dome.cx + dome.r} ${dome.cy} Z`} />
+            <g clipPath={`url(#${clip}-dome)`} fill="none">
+              {ribs.map((d, i) => (
+                <path key={`rb${i}`} d={d} strokeWidth={1.3} />
+              ))}
+              <path d={rules(dome.cx + dome.r * 0.2, dome.cy - dome.r * 1.1, dome.r, dome.r * 1.1, 90, 1.8, 21, 0.1)} strokeWidth={0.55} />
+            </g>
+            <rect x={dome.cx - 4} y={dome.cy - dome.r * 1.08 - 10} width={8} height={10} />
+            <path d={`M${f(dome.cx)} ${f(dome.cy - dome.r * 1.08 - 10)} v-14 M${f(dome.cx - 6)} ${f(dome.cy - dome.r * 1.08 - 18)} h12`} strokeWidth={1.8} fill="none" />
+            {/* side domes */}
+            {[0.12, 0.88].map((k) => {
+              const cx = ch.x + ch.w * k
+              const rr = ch.w * 0.1
+              return (
+                <g key={`sd${k}`}>
+                  <path d={`M${f(cx - rr)} ${f(ch.y)} A${f(rr)} ${f(rr * 1.1)} 0 0 1 ${f(cx + rr)} ${f(ch.y)} Z`} />
+                  <path d={`M${f(cx)} ${f(ch.y - rr * 1.1)} v-9 M${f(cx - 4)} ${f(ch.y - rr * 1.1 - 5)} h8`} strokeWidth={1.3} fill="none" />
+                  <path d={rules(cx, ch.y - rr * 1.1, rr, rr * 1.1, 90, 1.8, 30, 0.1)} strokeWidth={0.5} fill="none" clipPath={`url(#${clip}-img)`} opacity={0.9} />
+                </g>
+              )
+            })}
+            {/* arched windows and door */}
+            {[0.16, 0.34, 0.6, 0.78].map((k) => (
+              <path key={`aw${k}`} d={arch(ch.x + ch.w * k - 5, ch.y + ch.h * 0.2, 10, 22)} fill={INK} stroke="none" />
+            ))}
+            <path d={arch(ch.x + ch.w * 0.43, ch.y + ch.h * 0.46, ch.w * 0.14, ch.h * 0.54)} fill={INK} stroke="none" />
+            <path d={`M${f(ch.x - 4)} ${f(ch.y + ch.h * 0.12)} h${f(ch.w + 8)}`} strokeWidth={1.6} fill="none" />
+          </g>
+
+          {/* foreground: terrace wall and steps */}
           {[0, 1, 2, 3].map((k) => (
-            <path key={`stp${k}`} d={`M${f(ch.x - 18 - k * 8)} ${f(ch.y + ch.h * 1.1 + k * 7)} h${f(26 + k * 2)}`} fill="none" strokeWidth={1} />
+            <path key={`st${k}`} d={`M${f(U(0.02))} ${f(V(0.93 + k * 0.018))} h${f(iw * (0.3 - k * 0.04))}`} strokeWidth={1} />
           ))}
         </g>
-      </g>
 
-      {/* heavy inner rule over the picture edge */}
-      <rect x={ix} y={iy} width={iw} height={ih} strokeWidth={2.6} />
-
-      {/* ---- value tablet: ruled ground, white lettering ---- */}
-      <g clipPath={`url(#${clip}-tablet)`}>
-        <path d={rules(ix, iy + ih + 8, iw, h - ih - 64, 0, 3.4, 41, 0.1)} strokeWidth={0.5} opacity={0.8} />
+        <rect x={ix} y={iy} width={iw} height={ih} strokeWidth={2.2} />
       </g>
-      <rect x={ix} y={iy + ih + 8} width={iw} height={h - ih - 34 - 8 - 22} strokeWidth={1.6} />
-      <g fontFamily={SERIF} fontWeight={700} fill="#fff" stroke={INK} strokeWidth={1.4} paintOrder="stroke">
-        <text x={ix + 12} y={y + h - 38} fontSize={30} letterSpacing={7}>
-          HELLAS
-        </text>
-        <text x={ix + iw - 10} y={y + h - 36} textAnchor="end" fontSize={36}>
-          5Δ
-        </text>
-      </g>
-    </g>
     </>
   )
 }
 
 export function WaveStampInk() {
   const { x, y, w, h } = WAVE_STAMP
-  const ix = x + 16
-  const iy = y + 16
-  const iw = w - 32
-  const ih = h - 32
-  const r = rng(9)
+  const ix = x + 14
+  const iy = y + 14
+  const iw = w - 28
+  const ih = h - 28
+  // two heavy curling waves (bands of close parallel cuts), after the reference
+  const band = (y0: number, amp: number, seed: number) => {
+    const r = rng(seed)
+    const out: string[] = []
+    for (let k = 0; k < 8; k++) {
+      const yy = iy + y0 + k * 3.2
+      out.push(`M${f(ix - 4)} ${f(yy + amp)} C${f(ix + iw * 0.25)} ${f(yy - amp * 1.4 + r())} ${f(ix + iw * 0.5)} ${f(yy + amp * 1.6)} ${f(ix + iw * 0.72)} ${f(yy - amp * 0.4)} S${f(ix + iw + 6)} ${f(yy - amp * 1.2)} ${f(ix + iw + 6)} ${f(yy - amp * 1.2)}`)
+    }
+    return out.join(' ')
+  }
   return (
     <g stroke={INK} fill="none" strokeLinecap="round" transform={`rotate(-3 ${x + w / 2} ${y + h / 2})`}>
       <clipPath id="te-clip-wave">
         <rect x={ix} y={iy} width={iw} height={ih} />
       </clipPath>
-      <rect x={x + 9} y={y + 9} width={w - 18} height={h - 18} strokeWidth={0.8} />
+      <rect x={x + 7} y={y + 7} width={w - 14} height={h - 14} strokeWidth={0.9} />
       <g clipPath="url(#te-clip-wave)">
-        {/* ruled sky */}
-        {Array.from({ length: 8 }, (_, i) => (
-          <path key={`s${i}`} d={`M${ix} ${iy + 3 + i * 4} H${ix + iw}`} strokeWidth={0.5 + i * 0.07} />
-        ))}
-        <circle cx={ix + iw * 0.72} cy={iy + 20} r={11} fill="#fff" strokeWidth={1.4} />
-        {Array.from({ length: 12 }, (_, i) => {
-          const a = (i / 12) * Math.PI * 2
-          return <path key={`ray${i}`} d={`M${f(ix + iw * 0.72 + Math.cos(a) * 14)} ${f(iy + 20 + Math.sin(a) * 14)} l${f(Math.cos(a) * 5)} ${f(Math.sin(a) * 5)}`} strokeWidth={0.9} />
-        })}
-        {/* big engraved waves: crest line + hatched troughs */}
-        {Array.from({ length: 6 }, (_, i) => {
-          const yy = iy + 40 + i * 15
-          return (
-            <g key={i}>
-              <path d={wavePath(ix - 6, ix + iw + 6, yy, 4.6, 36, i * 0.9)} strokeWidth={2.4} />
-              <path d={wavePath(ix - 6, ix + iw + 6, yy + 4, 3.6, 36, i * 0.9)} strokeWidth={0.8} />
-              <path d={wavePath(ix - 6, ix + iw + 6, yy + 7.5, 2.6, 36, i * 0.9)} strokeWidth={0.6} strokeDasharray={`${f(10 + r() * 20)} 4`} />
-            </g>
-          )
-        })}
+        <path d={band(8, 10, 3)} strokeWidth={2.2} />
+        <path d={band(56, 12, 4)} strokeWidth={2.2} />
+        <path d={band(98, 9, 5)} strokeWidth={1.9} />
+        {/* curling crests */}
+        <path d={`M${f(ix + iw * 0.62)} ${f(iy + 30)} c10 -12 26 -10 30 2 c2 8 -6 12 -12 8`} strokeWidth={2.2} />
+        <path d={`M${f(ix + iw * 0.12)} ${f(iy + 82)} c10 -12 26 -10 30 2 c2 8 -6 12 -12 8`} strokeWidth={2.2} />
       </g>
-      <rect x={ix} y={iy} width={iw} height={ih} strokeWidth={2.2} />
+      <rect x={ix} y={iy} width={iw} height={ih} strokeWidth={2} />
     </g>
   )
 }
